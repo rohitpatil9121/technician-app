@@ -1,0 +1,9 @@
+{
+  "appId": "com.oasisglobe.technician",
+  "appName": "Oasis Technician",
+  "webDir": "dist",
+  "server": {
+    "androidScheme": "https",
+    "cleartext": true
+  }
+}

@@ -1,0 +1,113 @@
+import { useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { useJobs } from "../store/JobsContext.jsx";
+import { api } from "../lib/api.js";
+import { technician } from "../data/mock.js";
+import { Icon, PrimaryButton, input, cx } from "../components/ui.jsx";
+
+export default function Login() {
+  const { startLive, startDemo } = useJobs();
+  const nav = useNavigate();
+  const [phone, setPhone] = useState("");
+  const [otpSent, setOtpSent] = useState(false);
+  const [otp, setOtp] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+
+  const sendOtp = async () => {
+    setErr(""); setBusy(true);
+    try { await api.requestOtp(phone); setOtpSent(true); }
+    catch (e) { setErr(e.message); }
+    finally { setBusy(false); }
+  };
+
+  const verify = async () => {
+    setErr(""); setBusy(true);
+    try {
+      const { token, user } = await api.verifyOtp(phone, otp);
+      await startLive(token, user);
+      nav("/home");
+    } catch (e) { setErr(e.message || "Invalid or expired code"); }
+    finally { setBusy(false); }
+  };
+
+  const demo = () => { startDemo(); nav("/home"); };
+
+  return (
+    <div className="mx-auto flex min-h-screen w-full max-w-[440px] flex-col bg-white shadow-pop">
+      {/* Brand header */}
+      <div className="bg-gradient-to-br from-brand-light to-brand-dark px-6 pb-10 pt-12 text-white">
+        <div className="flex items-center gap-3">
+          <div className="grid h-12 w-12 place-items-center rounded-2xl bg-white/15">
+            <Icon.wrench width={26} height={26} />
+          </div>
+          <div>
+            <div className="text-xl font-extrabold leading-none">Oasis Globe</div>
+            <div className="text-sm text-white/80">Technician App</div>
+          </div>
+        </div>
+        <h1 className="mt-8 text-3xl font-extrabold">Technician Login</h1>
+        <p className="mt-1 text-white/85">Login with your registered mobile number</p>
+      </div>
+
+      <div className="-mt-6 flex-1 rounded-t-3xl bg-white px-6 pt-6">
+        <label className="text-sm font-medium text-slate-600">Mobile Number</label>
+        <div className="mt-1 flex items-center gap-2 rounded-xl border border-slate-200 px-3">
+          <Icon.phone width={18} height={18} className="text-slate-400" />
+          <input
+            className="w-full bg-transparent py-3 text-[15px] outline-none"
+            placeholder="98220 11223"
+            inputMode="numeric"
+            value={phone}
+            onChange={(e) => setPhone(e.target.value)}
+          />
+        </div>
+
+        {otpSent && (
+          <div className="mt-4 animate-in">
+            <label className="text-sm font-medium text-slate-600">Enter OTP</label>
+            <input
+              className={cx(input, "mt-1 tracking-[0.4em]")}
+              placeholder="••••••"
+              inputMode="numeric"
+              maxLength={6}
+              value={otp}
+              onChange={(e) => setOtp(e.target.value)}
+            />
+            <div className="mt-1 text-xs text-slate-400">Sent to your WhatsApp.</div>
+          </div>
+        )}
+
+        {err && <div className="mt-3 rounded-lg bg-danger-light px-3 py-2 text-sm text-danger">{err}</div>}
+
+        <div className="mt-5">
+          {!otpSent ? (
+            <PrimaryButton onClick={sendOtp} disabled={phone.length < 10 || busy}>
+              {busy ? "Sending…" : "Send OTP"}
+            </PrimaryButton>
+          ) : (
+            <PrimaryButton onClick={verify} disabled={otp.length < 6 || busy}>
+              {busy ? "Verifying…" : "Verify & Continue"}
+            </PrimaryButton>
+          )}
+        </div>
+
+        <div className="my-5 flex items-center gap-3 text-xs text-slate-400">
+          <span className="h-px flex-1 bg-slate-200" /> OR <span className="h-px flex-1 bg-slate-200" />
+        </div>
+
+        <button
+          onClick={demo}
+          className="w-full rounded-xl border border-slate-200 py-3 text-sm font-semibold text-slate-700 active:scale-[0.99]"
+        >
+          Demo Login (Prototype)
+        </button>
+
+        <p className="mt-6 text-center text-xs text-slate-400">
+          Need help? Call Service Manager:{" "}
+          <span className="font-semibold text-brand">{technician.serviceManagerPhone}</span>
+        </p>
+      </div>
+    </div>
+  );
+}

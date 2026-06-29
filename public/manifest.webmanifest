@@ -1,0 +1,13 @@
+{
+  "name": "Oasis Globe — Technician App",
+  "short_name": "Technician",
+  "description": "Field technician app for Oasis Globe service centre.",
+  "start_url": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#EEF4FB",
+  "theme_color": "#0E6FC4",
+  "icons": [
+    { "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}
