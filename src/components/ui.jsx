@@ -46,6 +46,7 @@ export const Icon = {
   alert: (p) => (<svg {...I(p)}><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" /><line x1="12" y1="9" x2="12" y2="13" /><line x1="12" y1="17" x2="12" y2="17" /></svg>),
   spark: (p) => (<svg {...I(p)}><path d="M12 3v4M12 17v4M3 12h4M17 12h4M5.6 5.6l2.8 2.8M15.6 15.6l2.8 2.8M18.4 5.6l-2.8 2.8M8.4 15.6l-2.8 2.8" /></svg>),
   wrench: (p) => (<svg {...I(p)}><path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3 18l3 3 6.3-6.3a4 4 0 0 0 5.4-5.4l-2.1 2.1-2.4-2.4z" /></svg>),
+  logout: (p) => (<svg {...I(p)}><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" /><polyline points="16 17 21 12 16 7" /><line x1="21" y1="12" x2="9" y2="12" /></svg>),
 };
 
 /* --------------------------------- Tags --------------------------------- */
@@ -173,7 +174,6 @@ export const BottomNav = () => {
     <nav className="sticky bottom-0 z-10 flex border-t border-slate-200 bg-white/95 backdrop-blur">
       <NavLink to="/home" className={cls}><Icon.home /> Home</NavLink>
       <NavLink to="/reviews" className={cls}><Icon.star width={20} height={20} /> Reviews</NavLink>
-      <NavLink to="/help" className={cls}><Icon.help /> Help</NavLink>
     </nav>
   );
 };

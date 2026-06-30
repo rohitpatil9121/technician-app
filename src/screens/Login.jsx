@@ -16,7 +16,7 @@ export default function Login() {
 
   const sendOtp = async () => {
     setErr(""); setBusy(true);
-    try { await api.requestOtp(phone); setOtpSent(true); }
+    try { await api.requestOtp("+91" + phone); setOtpSent(true); }
     catch (e) { setErr(e.message); }
     finally { setBusy(false); }
   };
@@ -24,7 +24,7 @@ export default function Login() {
   const verify = async () => {
     setErr(""); setBusy(true);
     try {
-      const { token, user } = await api.verifyOtp(phone, otp);
+      const { token, user } = await api.verifyOtp("+91" + phone, otp);
       await startLive(token, user);
       nav("/home");
     } catch (e) { setErr(e.message || "Invalid or expired code"); }
@@ -54,12 +54,14 @@ export default function Login() {
         <label className="text-sm font-medium text-slate-600">Mobile Number</label>
         <div className="mt-1 flex items-center gap-2 rounded-xl border border-slate-200 px-3">
           <Icon.phone width={18} height={18} className="text-slate-400" />
+          <span className="text-[15px] font-medium text-slate-500">+91</span>
           <input
             className="w-full bg-transparent py-3 text-[15px] outline-none"
             placeholder="98220 11223"
             inputMode="numeric"
+            maxLength={10}
             value={phone}
-            onChange={(e) => setPhone(e.target.value)}
+            onChange={(e) => setPhone(e.target.value.replace(/\D/g, "").slice(0, 10))}
           />
         </div>
 

@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "656305434518",
+    "project_id": "oasis-globe",
+    "storage_bucket": "oasis-globe.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:656305434518:android:082703c2cde2f8301937b7",
+        "android_client_info": {
+          "package_name": "com.oasisglobe.technician"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDVzITQNklLpLvas0bCpvHhqUXIFrS3190"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

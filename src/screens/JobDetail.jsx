@@ -32,6 +32,12 @@ const PhotoSlot = ({ label, on, onTap }) => (
   </button>
 );
 
+const SectionTitle = ({ children, required }) => (
+  <div className="mt-4 text-sm font-bold text-slate-700">
+    {children} {required && <span className="text-danger">REQUIRED</span>}
+  </div>
+);
+
 export default function JobDetail() {
   const { id } = useParams();
   const nav = useNavigate();
@@ -48,7 +54,6 @@ export default function JobDetail() {
   const [photos, setPhotos] = useState(w.photos || {});
   const [note, setNote] = useState(w.note || "");
   const [charge, setCharge] = useState(w.charge || (job?.visitCharge === 0 ? "warranty" : "visit"));
-  const [channel, setChannel] = useState("whatsapp");
   const [tdsFinal, setTdsFinal] = useState(w.tdsFinal || "");
   const [proof, setProof] = useState(w.proof || {});
   const [payments, setPayments] = useState(w.payments || []);
@@ -90,7 +95,7 @@ export default function JobDetail() {
   if (job.status === "CLOSED") {
     return (
       <div className="flex min-h-screen flex-col">
-        <DetailHeader job={job} nav={nav} step={9} />
+        <DetailHeader job={job} nav={nav} step={3} />
         <div className="flex flex-1 flex-col items-center justify-center px-6 text-center">
           <div className="grid h-20 w-20 place-items-center rounded-full bg-ok-light text-ok">
             <Icon.checkCircle width={40} height={40} />
@@ -118,12 +123,13 @@ export default function JobDetail() {
   let body = null;
   let footer = null;
 
+  /* ---- Step 0: Accept ---- */
   if (step === 0) {
     body = (
       <>
         <h2 className="text-xl font-extrabold text-slate-800">New job assigned</h2>
-        <p className="text-slate-500">Review and accept to start work</p>
-        <div className="mt-3"><InfoBox title="System will automatically:" items={["Notify customer of acceptance", "Start ETA window", "Log timestamp"]} /></div>
+        <p className="text-slate-500">Review and accept to start work.</p>
+        <div className="mt-3"><InfoBox title="On accept, the system will:" items={["Notify the customer", "Mark the job in progress", "Log the timestamp"]} /></div>
       </>
     );
     footer = (
@@ -132,35 +138,15 @@ export default function JobDetail() {
         <PrimaryButton onClick={() => advance("ACCEPTED")}><Icon.check width={18} height={18} /> Accept Job</PrimaryButton>
       </div>
     );
+
+  /* ---- Step 1: Diagnose + Estimate (one screen) ---- */
   } else if (step === 1) {
     body = (
       <>
-        <h2 className="text-xl font-extrabold text-slate-800">Ready to leave?</h2>
-        <p className="text-slate-500">Tap when you start travelling to the customer.</p>
-        <div className="mt-3"><InfoBox title="System will automatically:" items={["Send WhatsApp ETA to customer", "Start ETA / live tracking", "Log on-the-way timestamp"]} /></div>
-      </>
-    );
-    footer = <PrimaryButton onClick={() => advance("ON_THE_WAY")}><Icon.truck width={18} height={18} /> I'm On The Way</PrimaryButton>;
-  } else if (step === 2) {
-    body = (
-      <>
-        <h2 className="text-xl font-extrabold text-slate-800">Reached customer?</h2>
-        <p className="text-slate-500">Tap to confirm arrival at site.</p>
-        <div className="mt-3"><InfoBox tone="warn" title="Important" items={["You cannot start diagnosis until arrival is marked."]} /></div>
-        <div className="mt-2 rounded-xl bg-brand-50 p-3 text-sm">
-          <div className="flex items-center gap-1.5 font-semibold text-brand-dark"><Icon.pin width={15} height={15} /> GPS will be captured</div>
-          <div className="text-slate-600">Auto: location pin + arrival time logged for proof of visit.</div>
-        </div>
-      </>
-    );
-    footer = <PrimaryButton onClick={() => advance("ARRIVED", { gps: "18.59, 73.74" })}><Icon.pin width={18} height={18} /> Mark Arrived</PrimaryButton>;
-  } else if (step === 3) {
-    body = (
-      <>
-        <h2 className="text-xl font-extrabold text-slate-800">Diagnosis</h2>
-        <p className="text-slate-500">Tap all issues that apply.</p>
+        <h2 className="text-xl font-extrabold text-slate-800">Diagnose &amp; estimate</h2>
+        <p className="text-slate-500">Note the problem, add parts, set the price.</p>
 
-        <div className="mt-3 text-sm font-bold text-slate-700">A. Issue type <span className="text-danger">REQUIRED</span></div>
+        <SectionTitle required>Issue type</SectionTitle>
         <div className="mt-2 flex flex-wrap gap-2">
           {issueTypes.map((t) => (
             <button key={t} onClick={() => toggle(issues, setIssues, t)}
@@ -170,14 +156,13 @@ export default function JobDetail() {
           ))}
         </div>
 
-        <div className="mt-4 text-sm font-bold text-slate-700">B. TDS Readings <span className="text-danger">REQUIRED</span></div>
+        <SectionTitle required>TDS readings</SectionTitle>
         <div className="mt-2 grid grid-cols-2 gap-2">
           <Field label="Input TDS"><input className={input} inputMode="numeric" placeholder="e.g. 450" value={tdsIn} onChange={(e) => setTdsIn(e.target.value)} /></Field>
           <Field label="Output TDS"><input className={input} inputMode="numeric" placeholder="e.g. 80" value={tdsOut} onChange={(e) => setTdsOut(e.target.value)} /></Field>
         </div>
-        <div className="mt-1 text-xs text-slate-400">Mandatory before estimate.</div>
 
-        <div className="mt-4 text-sm font-bold text-slate-700">C. Parts required</div>
+        <SectionTitle>Parts required</SectionTitle>
         <div className="mt-2 flex gap-2">
           <select className={cx(input, "flex-1")} value={pick} onChange={(e) => setPick(e.target.value)}>
             <option value="">Select a part to add</option>
@@ -192,41 +177,28 @@ export default function JobDetail() {
             {parts.map((p, i) => (
               <div key={i} className="flex items-center justify-between rounded-xl border border-slate-200 px-3 py-2">
                 <span className="text-sm">{p.name}</span>
-                <button onClick={() => setParts(parts.filter((_, idx) => idx !== i))} className="text-slate-400"><Icon.trash width={16} height={16} /></button>
+                <div className="flex items-center gap-2">
+                  <span className="text-slate-400">₹</span>
+                  <input className="w-20 rounded-lg bg-slate-100 px-2 py-1 text-right text-sm" inputMode="numeric"
+                    value={p.price} onChange={(e) => setPartPrice(i, e.target.value)} />
+                  <button onClick={() => setParts(parts.filter((_, idx) => idx !== i))} className="text-slate-400"><Icon.trash width={16} height={16} /></button>
+                </div>
               </div>
             ))}
           </div>
         )}
 
-        <div className="mt-4 text-sm font-bold text-slate-700">D. Photos</div>
+        <SectionTitle>Photos</SectionTitle>
         <div className="mt-2 flex gap-2">
           <PhotoSlot label="Before" on={photos.before} onTap={() => setPhotos({ ...photos, before: !photos.before })} />
           <PhotoSlot label="Damage" on={photos.damage} onTap={() => setPhotos({ ...photos, damage: !photos.damage })} />
           <PhotoSlot label="Old Part" on={photos.oldPart} onTap={() => setPhotos({ ...photos, oldPart: !photos.oldPart })} />
         </div>
 
-        <div className="mt-4 text-sm font-bold text-slate-700">E. Technician note</div>
-        <div className="mt-2 flex gap-2">
-          <button className="flex items-center gap-1.5 rounded-xl border border-slate-200 px-3 text-sm text-slate-600"><Icon.mic width={16} height={16} /> Voice</button>
-          <textarea className={cx(input, "flex-1")} rows={1} placeholder="Optional note" value={note} onChange={(e) => setNote(e.target.value)} />
-        </div>
-      </>
-    );
-    footer = (
-      <PrimaryButton
-        disabled={!(issues.length && tdsIn && tdsOut)}
-        onClick={() => advance("DIAGNOSED", { issues, tdsIn, tdsOut, parts, photos, note })}
-      >
-        Submit Diagnosis
-      </PrimaryButton>
-    );
-  } else if (step === 4) {
-    body = (
-      <>
-        <h2 className="text-xl font-extrabold text-slate-800">Build estimate</h2>
-        <p className="text-slate-500">Select one charge type. Part prices can be edited.</p>
+        <SectionTitle>Technician note</SectionTitle>
+        <textarea className={cx(input, "mt-2")} rows={2} placeholder="Optional note" value={note} onChange={(e) => setNote(e.target.value)} />
 
-        <div className="mt-3 text-sm font-bold text-slate-700">Charge type</div>
+        <SectionTitle>Charge type</SectionTitle>
         <div className="mt-2 space-y-2">
           {chargeTypes.map((c) => (
             <button key={c.id} onClick={() => setCharge(c.id)}
@@ -237,143 +209,118 @@ export default function JobDetail() {
           ))}
         </div>
 
-        {parts.length > 0 && (
-          <>
-            <div className="mt-4 text-sm font-bold text-slate-700">Parts (edit prices if needed)</div>
-            <div className="mt-2 space-y-2">
-              {parts.map((p, i) => (
-                <div key={i} className="flex items-center justify-between rounded-xl border border-slate-200 px-3 py-2">
-                  <span className="text-sm">{p.name}</span>
-                  <div className="flex items-center gap-1">
-                    <span className="text-slate-400">₹</span>
-                    <input className="w-20 rounded-lg bg-slate-100 px-2 py-1 text-right text-sm" inputMode="numeric"
-                      value={p.price} onChange={(e) => setPartPrice(i, e.target.value)} />
-                  </div>
-                </div>
-              ))}
-            </div>
-          </>
-        )}
-
         <div className="mt-4 rounded-2xl border border-slate-200 p-3">
           <div className="font-bold text-slate-800">Bill summary</div>
           <Row l={chargeTypes.find((c) => c.id === charge)?.label} r={rupee(chargeAmt)} />
           {parts.map((p, i) => <Row key={i} l={p.name} r={rupeeAmt(p.price)} muted />)}
-          <Row l="Parts total" r={rupeeAmt(partsTotal)} bold />
+          {parts.length > 0 && <Row l="Parts total" r={rupeeAmt(partsTotal)} bold />}
           <div className="mt-1 flex items-center justify-between border-t border-slate-100 pt-2">
             <span className="font-bold text-slate-800">Grand total</span>
             <span className="text-lg font-extrabold text-brand">{rupeeAmt(chargeAmt + partsTotal)}</span>
           </div>
         </div>
-        <div className="mt-2 text-xs text-slate-400">🔒 Charge types are fixed. Customer approval is required before any paid repair.</div>
-      </>
-    );
-    footer = <PrimaryButton disabled={!charge} onClick={() => advance("ESTIMATE_SENT", { charge, parts })}>Send Estimate for Approval</PrimaryButton>;
-  } else if (step === 5) {
-    body = (
-      <>
-        <h2 className="text-xl font-extrabold text-slate-800">Get customer approval</h2>
-        <p className="text-slate-500">Estimate is sent on WhatsApp. Manager can approve if customer can't.</p>
-
-        <div className="mt-3 rounded-2xl border border-slate-200 p-3">
-          <div className="font-bold text-slate-800">Estimate summary</div>
-          <div className="text-sm text-slate-600">Charge: {chargeTypes.find((c) => c.id === charge)?.label}</div>
-          {parts.length > 0 && <div className="text-sm text-slate-600">Parts: {parts.map((p) => p.name).join(", ")}</div>}
-          <div className="mt-1 flex items-center justify-between border-t border-slate-100 pt-2">
-            <span className="font-semibold">Total</span><span className="font-extrabold text-brand">{rupeeAmt(chargeAmt + partsTotal)}</span>
-          </div>
-        </div>
-
-        <div className="mt-3 text-sm font-bold text-slate-700">Approval channel</div>
-        <div className="mt-2 grid grid-cols-2 gap-2">
-          {[["whatsapp", "WhatsApp", "System-sent message to customer"], ["manager", "Service Manager", "If customer can't respond"]].map(([id, t, s]) => (
-            <button key={id} onClick={() => setChannel(id)}
-              className={cx("rounded-xl border p-3 text-left", channel === id ? "border-brand bg-brand-50" : "border-slate-200")}>
-              <div className="text-sm font-semibold text-brand-dark">{t}</div>
-              <div className="text-xs text-slate-500">{s}</div>
-            </button>
-          ))}
-        </div>
-
-        <GhostButton className="mt-3 w-full"><Icon.map width={16} height={16} /> Send Estimate via WhatsApp</GhostButton>
-        <div className="mt-2 text-center text-xs text-slate-400">If rejected: collect visit charge only and proceed to payment.</div>
+        <div className="mt-2 text-xs text-slate-400">Sends the estimate to the customer on WhatsApp for approval.</div>
       </>
     );
     footer = (
-      <div className="grid grid-cols-2 gap-2">
-        <GhostButton className="!border-danger/30 !text-danger" onClick={() => advance("REJECTED")}>✕ Rejected</GhostButton>
-        <PrimaryButton className="!bg-ok" onClick={() => advance("VERIFIED")}><Icon.check width={18} height={18} /> Approved</PrimaryButton>
-      </div>
+      <PrimaryButton
+        disabled={!(issues.length && tdsIn && tdsOut && charge)}
+        onClick={() => advance("ESTIMATE_SENT", {
+          issues, tdsIn, tdsOut, parts, photos, note, charge,
+          total: chargeAmt + partsTotal,
+        })}
+      >
+        Send Estimate for Approval
+      </PrimaryButton>
     );
-  } else if (step === 6) {
-    const hasParts = parts.length > 0;
-    body = (
-      <>
-        <h2 className="text-xl font-extrabold text-slate-800">Work done — verify</h2>
-        <p className="text-slate-500">Capture proof of work before taking payment.</p>
 
-        <div className="mt-3"><Field label="Final Output TDS (from machine)" hint={`Pre-repair output was ${tdsOut || "—"}. Lower is cleaner.`}>
-          <input className={input} inputMode="numeric" placeholder="e.g. 40" value={tdsFinal} onChange={(e) => setTdsFinal(e.target.value)} />
-        </Field></div>
-
-        <div className="mt-4 text-sm font-bold text-slate-700">Parts photos {hasParts && <span className="text-danger">REQUIRED</span>}</div>
-        {hasParts ? (
-          <div className="mt-2 flex gap-2">
-            <PhotoSlot label="New parts installed" on={proof.newParts} onTap={() => setProof({ ...proof, newParts: !proof.newParts })} />
-            <PhotoSlot label="Old / used parts removed" on={proof.oldParts} onTap={() => setProof({ ...proof, oldParts: !proof.oldParts })} />
-          </div>
-        ) : (
-          <div className="mt-1 text-sm text-slate-400">No parts were used on this job.</div>
-        )}
-      </>
-    );
-    const ok = tdsFinal && (parts.length === 0 || (proof.newParts && proof.oldParts));
-    footer = <PrimaryButton disabled={!ok} onClick={() => advance("WORK_DONE", { tdsFinal, proof })}><Icon.checkCircle width={18} height={18} /> Confirm Work Done</PrimaryButton>;
-  } else if (step === 7) {
-    body = (
-      <>
-        <h2 className="text-xl font-extrabold text-slate-800">Collect payment</h2>
-        <p className="text-slate-500">Split across UPI, Cash and Card as needed.</p>
-        {rejected && <div className="mt-2 rounded-xl bg-warn-light p-2 text-sm text-warn">Estimate rejected — collecting visit charge only.</div>}
-
-        <div className="mt-3 rounded-2xl border border-slate-200 p-3">
-          {!rejected && <Row l={chargeTypes.find((c) => c.id === charge)?.label} r={rupee(chargeAmt)} />}
-          {!rejected && parts.length > 0 && <Row l="Parts" r={rupeeAmt(partsTotal)} />}
-          {rejected && <Row l="Visit charge" r={rupeeAmt(total)} />}
-          <div className="mt-1 flex items-center justify-between border-t border-slate-100 pt-2">
-            <span className="font-bold text-slate-800">Total bill</span><span className="text-lg font-extrabold text-brand">{rupeeAmt(total)}</span>
-          </div>
-        </div>
-
-        <div className="mt-3 grid grid-cols-2 gap-2">
-          <div className="rounded-xl bg-ok-light p-3"><div className="text-xs text-slate-500">Collected</div><div className="text-xl font-extrabold text-ok">{rupeeAmt(collected)}</div></div>
-          <div className="rounded-xl bg-warn-light p-3"><div className="text-xs text-slate-500">Remaining</div><div className="text-xl font-extrabold text-warn">{rupeeAmt(remaining)}</div></div>
-        </div>
-
-        {remaining > 0 && (
-          <>
-            <div className="mt-4 text-sm font-bold text-slate-700">Add payment</div>
-            <div className="mt-2 grid grid-cols-3 gap-2">
-              {["UPI", "Cash", "Credit Card"].map((m) => (
-                <button key={m} onClick={() => setPayMethod(m)} className={cx("rounded-xl border py-3 text-sm font-medium", payMethod === m ? "border-brand bg-brand-50 text-brand-dark" : "border-slate-200 text-slate-600")}>{m}</button>
-              ))}
+  /* ---- Step 2: Payment & Close (approval → finalize) ---- */
+  } else if (step === 2) {
+    /* Phase A — waiting for the customer's approval of the sent estimate */
+    if (job.status === "ESTIMATE_SENT") {
+      body = (
+        <>
+          <h2 className="text-xl font-extrabold text-slate-800">Customer approval</h2>
+          <p className="text-slate-500">The estimate was sent on WhatsApp. Mark the customer's response.</p>
+          <div className="mt-3 rounded-2xl border border-slate-200 p-3">
+            <div className="font-bold text-slate-800">Estimate summary</div>
+            <div className="text-sm text-slate-600">Charge: {chargeTypes.find((c) => c.id === charge)?.label}</div>
+            {parts.length > 0 && <div className="text-sm text-slate-600">Parts: {parts.map((p) => p.name).join(", ")}</div>}
+            <div className="mt-1 flex items-center justify-between border-t border-slate-100 pt-2">
+              <span className="font-semibold">Total</span><span className="font-extrabold text-brand">{rupeeAmt(chargeAmt + partsTotal)}</span>
             </div>
-            <div className="mt-2 flex gap-2">
-              <input className={cx(input, "flex-1")} inputMode="numeric" placeholder={`Up to ${rupeeAmt(remaining)}`} value={payAmt} onChange={(e) => setPayAmt(e.target.value)} />
-              <button onClick={addPayment} disabled={!payAmt} className="rounded-xl bg-brand-100 px-4 font-semibold text-brand-dark disabled:opacity-50">+ Add</button>
+          </div>
+          <div className="mt-2 text-center text-xs text-slate-400">If rejected, collect the visit charge only and close.</div>
+        </>
+      );
+      footer = (
+        <div className="grid grid-cols-2 gap-2">
+          <GhostButton className="!border-danger/30 !text-danger" onClick={() => advance("REJECTED")}>✕ Rejected</GhostButton>
+          <PrimaryButton className="!bg-ok" onClick={() => advance("VERIFIED")}><Icon.check width={18} height={18} /> Approved</PrimaryButton>
+        </div>
+      );
+
+    /* Phase B — proof of work, collect payment, close (one screen) */
+    } else {
+      const hasParts = parts.length > 0;
+      const proofOk = !hasParts || (proof.newParts && proof.oldParts);
+      // Rejected jobs skip the work-proof fields (no repair done), so don't
+      // gate the close on them — only the visit charge must be collected.
+      const canClose = remaining === 0 && (rejected || (tdsFinal && proofOk));
+      body = (
+        <>
+          <h2 className="text-xl font-extrabold text-slate-800">Payment &amp; close</h2>
+          <p className="text-slate-500">Capture proof, collect payment, then close the job.</p>
+          {rejected && <div className="mt-2 rounded-xl bg-warn-light p-2 text-sm text-warn">Estimate rejected — collecting visit charge only.</div>}
+
+          {!rejected && (
+            <>
+              <SectionTitle>Final output TDS</SectionTitle>
+              <input className={cx(input, "mt-2")} inputMode="numeric" placeholder={`Pre-repair output was ${tdsOut || "—"}`} value={tdsFinal} onChange={(e) => setTdsFinal(e.target.value)} />
+
+              <SectionTitle required={hasParts}>Parts photos</SectionTitle>
+              {hasParts ? (
+                <div className="mt-2 flex gap-2">
+                  <PhotoSlot label="New parts installed" on={proof.newParts} onTap={() => setProof({ ...proof, newParts: !proof.newParts })} />
+                  <PhotoSlot label="Old / used parts removed" on={proof.oldParts} onTap={() => setProof({ ...proof, oldParts: !proof.oldParts })} />
+                </div>
+              ) : (
+                <div className="mt-1 text-sm text-slate-400">No parts were used on this job.</div>
+              )}
+            </>
+          )}
+
+          <div className="mt-4 rounded-2xl border border-slate-200 p-3">
+            {!rejected && <Row l={chargeTypes.find((c) => c.id === charge)?.label} r={rupee(chargeAmt)} />}
+            {!rejected && parts.length > 0 && <Row l="Parts" r={rupeeAmt(partsTotal)} />}
+            {rejected && <Row l="Visit charge" r={rupeeAmt(total)} />}
+            <div className="mt-1 flex items-center justify-between border-t border-slate-100 pt-2">
+              <span className="font-bold text-slate-800">Total bill</span><span className="text-lg font-extrabold text-brand">{rupeeAmt(total)}</span>
             </div>
-            {payMethod === "UPI" && (
-              <div className="mt-2 flex items-center gap-3 rounded-xl bg-slate-100 p-3 text-sm text-slate-600">
-                <Icon.qr width={28} height={28} /> Show QR to customer for {rupeeAmt(remaining)}.
+          </div>
+
+          <div className="mt-3 grid grid-cols-2 gap-2">
+            <div className="rounded-xl bg-ok-light p-3"><div className="text-xs text-slate-500">Collected</div><div className="text-xl font-extrabold text-ok">{rupeeAmt(collected)}</div></div>
+            <div className="rounded-xl bg-warn-light p-3"><div className="text-xs text-slate-500">Remaining</div><div className="text-xl font-extrabold text-warn">{rupeeAmt(remaining)}</div></div>
+          </div>
+
+          {remaining > 0 && (
+            <>
+              <SectionTitle>Add payment</SectionTitle>
+              <div className="mt-2 grid grid-cols-3 gap-2">
+                {["UPI", "Cash", "Credit Card"].map((m) => (
+                  <button key={m} onClick={() => setPayMethod(m)} className={cx("rounded-xl border py-3 text-sm font-medium", payMethod === m ? "border-brand bg-brand-50 text-brand-dark" : "border-slate-200 text-slate-600")}>{m}</button>
+                ))}
               </div>
-            )}
-          </>
-        )}
+              <div className="mt-2 flex gap-2">
+                <input className={cx(input, "flex-1")} inputMode="numeric" placeholder={`Up to ${rupeeAmt(remaining)}`} value={payAmt} onChange={(e) => setPayAmt(e.target.value)} />
+                <button onClick={addPayment} disabled={!payAmt} className="rounded-xl bg-brand-100 px-4 font-semibold text-brand-dark disabled:opacity-50">+ Add</button>
+              </div>
+            </>
+          )}
 
-        {payments.length > 0 && (
-          <>
-            <div className="mt-4 text-sm font-bold text-slate-700">Reconciliation</div>
-            <div className="mt-2 space-y-2">
+          {payments.length > 0 && (
+            <div className="mt-3 space-y-2">
               {payments.map((p, i) => (
                 <div key={i} className="flex items-center justify-between rounded-xl border border-slate-200 px-3 py-2 text-sm">
                   <span>{p.method}</span>
@@ -382,40 +329,33 @@ export default function JobDetail() {
                   </div>
                 </div>
               ))}
+              {remaining === 0 && <div className="flex items-center gap-1.5 text-sm text-ok"><Icon.check width={15} height={15} /> Bill fully collected.</div>}
             </div>
-            {remaining === 0 && <div className="mt-2 flex items-center gap-1.5 text-sm text-ok"><Icon.check width={15} height={15} /> Bill fully collected.</div>}
-          </>
-        )}
-      </>
-    );
-    footer = <PrimaryButton disabled={remaining > 0} onClick={() => advance("PAID", { payments, total })}>Confirm Payment</PrimaryButton>;
-  } else if (step === 8) {
-    body = (
-      <>
-        <h2 className="text-xl font-extrabold text-slate-800">Work summary</h2>
-        <p className="text-slate-500">Payment by the customer confirms the work is done.</p>
+          )}
 
-        <div className="mt-3 rounded-2xl border border-slate-200 p-3">
-          <div className="font-bold text-slate-800">Summary</div>
-          <div className="text-sm text-slate-500">{issues.join(", ") || job.issue}</div>
-          <div className="mt-2 grid grid-cols-2 gap-2 text-sm">
-            <Box l="Amount" v={rupeeAmt(total)} />
-            <Box l="Modes" v={[...new Set(payments.map((p) => p.method))].join(", ") || "—"} />
-            <Box l="Output TDS" v={tdsFinal || "—"} />
-            <Box l="Next service" v={nextService} />
-          </div>
-        </div>
+          <SectionTitle>Next service reminder</SectionTitle>
+          <select className={cx(input, "mt-2")} value={nextService} onChange={(e) => setNextService(e.target.value)}>
+            <option>3 months</option><option>6 months</option><option>12 months</option>
+          </select>
 
-        <button onClick={() => setLead((v) => !v)} className="mt-3 flex w-full items-center justify-between rounded-2xl border border-ok/20 bg-ok-light p-3 text-left">
-          <div>
-            <div className="flex items-center gap-1.5 font-semibold text-ok"><Icon.spark width={16} height={16} /> Create a lead?</div>
-            <div className="text-sm text-slate-600">Customer wants new purifier or special part? Manager will follow up.</div>
-          </div>
-          <span className={cx("rounded-full px-3 py-1 text-xs font-bold", lead ? "bg-ok text-white" : "bg-white text-slate-400")}>{lead ? "Yes" : "No"}</span>
-        </button>
-      </>
-    );
-    footer = <PrimaryButton onClick={() => advance("CLOSED", { tdsFinal, nextService, lead })}>Close Job</PrimaryButton>;
+          <button onClick={() => setLead((v) => !v)} className="mt-3 flex w-full items-center justify-between rounded-2xl border border-ok/20 bg-ok-light p-3 text-left">
+            <div>
+              <div className="flex items-center gap-1.5 font-semibold text-ok"><Icon.spark width={16} height={16} /> Create a lead?</div>
+              <div className="text-sm text-slate-600">Customer wants a new purifier or special part? Manager will follow up.</div>
+            </div>
+            <span className={cx("rounded-full px-3 py-1 text-xs font-bold", lead ? "bg-ok text-white" : "bg-white text-slate-400")}>{lead ? "Yes" : "No"}</span>
+          </button>
+        </>
+      );
+      footer = (
+        <PrimaryButton
+          disabled={!canClose}
+          onClick={() => advance("CLOSED", { tdsFinal, proof, payments, total, nextService, lead })}
+        >
+          <Icon.checkCircle width={18} height={18} /> Collect Payment &amp; Close
+        </PrimaryButton>
+      );
+    }
   }
 
   return (
@@ -482,7 +422,4 @@ const Row = ({ l, r, bold, muted }) => (
   <div className={cx("flex items-center justify-between py-0.5", muted ? "text-sm text-slate-500" : "text-slate-700", bold && "font-bold")}>
     <span>{l}</span><span>{r}</span>
   </div>
-);
-const Box = ({ l, v }) => (
-  <div className="rounded-xl bg-slate-100 p-2"><div className="text-[11px] text-slate-400">{l}</div><div className="font-semibold text-slate-700">{v}</div></div>
 );

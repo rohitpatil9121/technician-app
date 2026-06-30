@@ -1,29 +1,25 @@
-// The fixed job lifecycle. Order matters — the stepper renders this array.
+// The simplified 3-step job lifecycle. Order matters — the stepper renders this
+// array. The older fine-grained statuses still exist (and map below) so jobs
+// mid-flow resume on the right step.
 export const STEPS = [
   { key: "accept", label: "Accept" },
-  { key: "travel", label: "Travel" },
-  { key: "arrive", label: "Arrive" },
-  { key: "diagnose", label: "Diagnose" },
-  { key: "estimate", label: "Estimate" },
-  { key: "approval", label: "Approval" },
-  { key: "workdone", label: "Work Done" },
-  { key: "payment", label: "Payment" },
-  { key: "complete", label: "Complete" },
+  { key: "service", label: "Diagnose & Estimate" },
+  { key: "close", label: "Payment & Close" },
 ];
 
 // Which step a status sits on (the step the technician acts on next).
 const STATUS_STEP = {
   NEW: 0,
   ACCEPTED: 1,
-  ON_THE_WAY: 2,
-  ARRIVED: 3,
-  DIAGNOSED: 4,
-  ESTIMATE_SENT: 5,
-  VERIFIED: 6,
-  REJECTED: 7, // rejected estimate skips Work Done → visit-charge-only payment
-  WORK_DONE: 7,
-  PAID: 8,
-  CLOSED: 9,
+  ON_THE_WAY: 1,
+  ARRIVED: 1,
+  DIAGNOSED: 1,
+  ESTIMATE_SENT: 2,
+  VERIFIED: 2,
+  REJECTED: 2,
+  WORK_DONE: 2,
+  PAID: 2,
+  CLOSED: 3,
 };
 
 export const stepIndexForStatus = (status) =>

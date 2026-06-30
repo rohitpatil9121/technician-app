@@ -38,6 +38,7 @@ export const api = {
   parts: () => req("/tech/parts"),
   reviews: () => req("/tech/reviews"),
   setOnline: (is_online) => req("/tech/availability", { method: "PATCH", body: { is_online } }),
+  savePushToken: (token) => req("/tech/push-token", { method: "POST", body: { token } }),
 };
 
 // Coarse status (sent by JobDetail) → backend step action.

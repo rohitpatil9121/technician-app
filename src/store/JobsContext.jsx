@@ -51,6 +51,16 @@ export function JobsProvider({ children }) {
     setLoggedIn(true);
   }, []);
 
+  // Sign out: drop the token and reset to the logged-out state. The <App>
+  // route guard then redirects to the login screen.
+  const logout = useCallback(() => {
+    setToken(null);
+    setLive(false);
+    setLoggedIn(false);
+    setUser(null);
+    setJobs([]);
+  }, []);
+
   const getJob = (id) => jobs.find((j) => j.id === id);
 
   // Advance a job: optimistic local update, then persist in live mode.
@@ -75,8 +85,8 @@ export function JobsProvider({ children }) {
   };
 
   const value = useMemo(
-    () => ({ jobs, parts, reviews, user, online, setOnline, loggedIn, live, startLive, startDemo, updateJob, getJob, loadJobs }),
-    [jobs, parts, reviews, user, online, loggedIn, live, loadJobs]
+    () => ({ jobs, parts, reviews, user, online, setOnline, loggedIn, live, startLive, startDemo, logout, updateJob, getJob, loadJobs }),
+    [jobs, parts, reviews, user, online, loggedIn, live, logout, loadJobs]
   );
 
   return <JobsContext.Provider value={value}>{children}</JobsContext.Provider>;
