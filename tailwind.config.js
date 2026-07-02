@@ -1,6 +1,13 @@
+import { fileURLToPath } from "url";
+import { dirname, join } from "path";
+
+// Resolve content globs against THIS file's folder, not the process cwd — so the
+// build works whether Vite is launched from here or from a parent/monorepo root.
+const here = dirname(fileURLToPath(import.meta.url));
+
 /** @type {import('tailwindcss').Config} */
 export default {
-  content: ["./index.html", "./src/**/*.{js,jsx}"],
+  content: [join(here, "index.html"), join(here, "src/**/*.{js,jsx}")],
   theme: {
     extend: {
       colors: {

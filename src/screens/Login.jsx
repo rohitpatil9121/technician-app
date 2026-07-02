@@ -1,8 +1,7 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useJobs } from "../store/JobsContext.jsx";
 import { api } from "../lib/api.js";
-import { technician } from "../data/mock.js";
 import { Icon, PrimaryButton, input, cx } from "../components/ui.jsx";
 
 export default function Login() {
@@ -13,6 +12,15 @@ export default function Login() {
   const [otp, setOtp] = useState("");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
+  const tapRef = useRef(0);
+
+  // Hidden demo login (testing only): tap the brand logo 5 times to enter the
+  // prototype/mock mode. No visible button, so customers/technicians won't see it.
+  // A ref (not state) so it counts correctly even on fast, back-to-back taps.
+  const secretTap = () => {
+    tapRef.current += 1;
+    if (tapRef.current >= 5) { tapRef.current = 0; startDemo(); nav("/home"); }
+  };
 
   const sendOtp = async () => {
     setErr(""); setBusy(true);
@@ -31,14 +39,12 @@ export default function Login() {
     finally { setBusy(false); }
   };
 
-  const demo = () => { startDemo(); nav("/home"); };
-
   return (
     <div className="mx-auto flex min-h-screen w-full max-w-[440px] flex-col bg-white shadow-pop">
       {/* Brand header */}
       <div className="bg-gradient-to-br from-brand-light to-brand-dark px-6 pb-10 pt-12 text-white">
         <div className="flex items-center gap-3">
-          <div className="grid h-12 w-12 place-items-center rounded-2xl bg-white/15">
+          <div onClick={secretTap} className="grid h-12 w-12 cursor-pointer place-items-center rounded-2xl bg-white/15 select-none">
             <Icon.wrench width={26} height={26} />
           </div>
           <div>
@@ -93,22 +99,6 @@ export default function Login() {
             </PrimaryButton>
           )}
         </div>
-
-        <div className="my-5 flex items-center gap-3 text-xs text-slate-400">
-          <span className="h-px flex-1 bg-slate-200" /> OR <span className="h-px flex-1 bg-slate-200" />
-        </div>
-
-        <button
-          onClick={demo}
-          className="w-full rounded-xl border border-slate-200 py-3 text-sm font-semibold text-slate-700 active:scale-[0.99]"
-        >
-          Demo Login (Prototype)
-        </button>
-
-        <p className="mt-6 text-center text-xs text-slate-400">
-          Need help? Call Service Manager:{" "}
-          <span className="font-semibold text-brand">{technician.serviceManagerPhone}</span>
-        </p>
       </div>
     </div>
   );

@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useJobs } from "../store/JobsContext.jsx";
-import { issueTypes, chargeTypes } from "../data/mock.js";
+import { chargeTypes } from "../data/mock.js";
 import { stepIndexForStatus } from "../lib/workflow.js";
 import { rupee, rupeeAmt } from "../lib/format.js";
 import {
@@ -19,19 +19,6 @@ const InfoBox = ({ title, items, tone = "brand" }) => (
   </div>
 );
 
-const PhotoSlot = ({ label, on, onTap }) => (
-  <button
-    onClick={onTap}
-    className={cx(
-      "flex aspect-square flex-1 flex-col items-center justify-center gap-1 rounded-xl border-2 border-dashed text-xs",
-      on ? "border-ok bg-ok-light text-ok" : "border-slate-200 text-slate-400"
-    )}
-  >
-    {on ? <Icon.check width={22} height={22} strokeWidth={2.5} /> : <Icon.camera width={22} height={22} />}
-    {label}
-  </button>
-);
-
 const SectionTitle = ({ children, required }) => (
   <div className="mt-4 text-sm font-bold text-slate-700">
     {children} {required && <span className="text-danger">REQUIRED</span>}
@@ -46,16 +33,13 @@ export default function JobDetail() {
 
   /* ---- form state (all steps) ---- */
   const w = job?.work || {};
-  const [issues, setIssues] = useState(w.issues || []);
   const [tdsIn, setTdsIn] = useState(w.tdsIn || "");
   const [tdsOut, setTdsOut] = useState(w.tdsOut || "");
   const [parts, setParts] = useState(w.parts || []);
   const [pick, setPick] = useState("");
-  const [photos, setPhotos] = useState(w.photos || {});
   const [note, setNote] = useState(w.note || "");
   const [charge, setCharge] = useState(w.charge || (job?.visitCharge === 0 ? "warranty" : "visit"));
   const [tdsFinal, setTdsFinal] = useState(w.tdsFinal || "");
-  const [proof, setProof] = useState(w.proof || {});
   const [payments, setPayments] = useState(w.payments || []);
   const [payMethod, setPayMethod] = useState("UPI");
   const [payAmt, setPayAmt] = useState("");
@@ -74,9 +58,6 @@ export default function JobDetail() {
   const remaining = Math.max(0, total - collected);
 
   const advance = (status, work) => updateJob(job.id, { status, work });
-
-  const toggle = (arr, set, v) =>
-    set(arr.includes(v) ? arr.filter((x) => x !== v) : [...arr, v]);
 
   const addPart = () => {
     const p = partsCatalog.find((x) => x.id === pick);
@@ -146,17 +127,7 @@ export default function JobDetail() {
         <h2 className="text-xl font-extrabold text-slate-800">Diagnose &amp; estimate</h2>
         <p className="text-slate-500">Note the problem, add parts, set the price.</p>
 
-        <SectionTitle required>Issue type</SectionTitle>
-        <div className="mt-2 flex flex-wrap gap-2">
-          {issueTypes.map((t) => (
-            <button key={t} onClick={() => toggle(issues, setIssues, t)}
-              className={cx("rounded-full border px-3 py-1.5 text-sm", issues.includes(t) ? "border-brand bg-brand text-white" : "border-slate-200 text-slate-600")}>
-              {t}
-            </button>
-          ))}
-        </div>
-
-        <SectionTitle required>TDS readings</SectionTitle>
+        <SectionTitle>TDS readings</SectionTitle>
         <div className="mt-2 grid grid-cols-2 gap-2">
           <Field label="Input TDS"><input className={input} inputMode="numeric" placeholder="e.g. 450" value={tdsIn} onChange={(e) => setTdsIn(e.target.value)} /></Field>
           <Field label="Output TDS"><input className={input} inputMode="numeric" placeholder="e.g. 80" value={tdsOut} onChange={(e) => setTdsOut(e.target.value)} /></Field>
@@ -188,13 +159,6 @@ export default function JobDetail() {
           </div>
         )}
 
-        <SectionTitle>Photos</SectionTitle>
-        <div className="mt-2 flex gap-2">
-          <PhotoSlot label="Before" on={photos.before} onTap={() => setPhotos({ ...photos, before: !photos.before })} />
-          <PhotoSlot label="Damage" on={photos.damage} onTap={() => setPhotos({ ...photos, damage: !photos.damage })} />
-          <PhotoSlot label="Old Part" on={photos.oldPart} onTap={() => setPhotos({ ...photos, oldPart: !photos.oldPart })} />
-        </div>
-
         <SectionTitle>Technician note</SectionTitle>
         <textarea className={cx(input, "mt-2")} rows={2} placeholder="Optional note" value={note} onChange={(e) => setNote(e.target.value)} />
 
@@ -224,9 +188,9 @@ export default function JobDetail() {
     );
     footer = (
       <PrimaryButton
-        disabled={!(issues.length && tdsIn && tdsOut && charge)}
+        disabled={!charge}
         onClick={() => advance("ESTIMATE_SENT", {
-          issues, tdsIn, tdsOut, parts, photos, note, charge,
+          tdsIn, tdsOut, parts, note, charge,
           total: chargeAmt + partsTotal,
         })}
       >
@@ -262,31 +226,19 @@ export default function JobDetail() {
 
     /* Phase B — proof of work, collect payment, close (one screen) */
     } else {
-      const hasParts = parts.length > 0;
-      const proofOk = !hasParts || (proof.newParts && proof.oldParts);
-      // Rejected jobs skip the work-proof fields (no repair done), so don't
-      // gate the close on them — only the visit charge must be collected.
-      const canClose = remaining === 0 && (rejected || (tdsFinal && proofOk));
+      // Close only needs the bill to be fully collected — TDS and photos are
+      // optional now (no required proof fields).
+      const canClose = remaining === 0;
       body = (
         <>
           <h2 className="text-xl font-extrabold text-slate-800">Payment &amp; close</h2>
-          <p className="text-slate-500">Capture proof, collect payment, then close the job.</p>
+          <p className="text-slate-500">Collect payment, then close the job.</p>
           {rejected && <div className="mt-2 rounded-xl bg-warn-light p-2 text-sm text-warn">Estimate rejected — collecting visit charge only.</div>}
 
           {!rejected && (
             <>
               <SectionTitle>Final output TDS</SectionTitle>
               <input className={cx(input, "mt-2")} inputMode="numeric" placeholder={`Pre-repair output was ${tdsOut || "—"}`} value={tdsFinal} onChange={(e) => setTdsFinal(e.target.value)} />
-
-              <SectionTitle required={hasParts}>Parts photos</SectionTitle>
-              {hasParts ? (
-                <div className="mt-2 flex gap-2">
-                  <PhotoSlot label="New parts installed" on={proof.newParts} onTap={() => setProof({ ...proof, newParts: !proof.newParts })} />
-                  <PhotoSlot label="Old / used parts removed" on={proof.oldParts} onTap={() => setProof({ ...proof, oldParts: !proof.oldParts })} />
-                </div>
-              ) : (
-                <div className="mt-1 text-sm text-slate-400">No parts were used on this job.</div>
-              )}
             </>
           )}
 
@@ -350,7 +302,7 @@ export default function JobDetail() {
       footer = (
         <PrimaryButton
           disabled={!canClose}
-          onClick={() => advance("CLOSED", { tdsFinal, proof, payments, total, nextService, lead })}
+          onClick={() => advance("CLOSED", { tdsFinal, payments, total, nextService, lead })}
         >
           <Icon.checkCircle width={18} height={18} /> Collect Payment &amp; Close
         </PrimaryButton>
@@ -414,6 +366,13 @@ function ContextCards({ job }) {
         <div className="text-sm text-slate-500">{job.model}</div>
         <div className="text-xs text-slate-400">Last service: {job.lastService}</div>
       </div>
+
+      {job.notes ? (
+        <div className="mt-3 rounded-2xl border border-warn/30 bg-warn-light p-4">
+          <div className="flex items-center gap-1.5 text-sm font-semibold text-warn"><Icon.spark width={15} height={15} /> Customer notes</div>
+          <div className="mt-1 whitespace-pre-wrap text-[15px] text-slate-800">{job.notes}</div>
+        </div>
+      ) : null}
     </>
   );
 }

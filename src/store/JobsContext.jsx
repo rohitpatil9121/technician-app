@@ -30,6 +30,23 @@ export function JobsProvider({ children }) {
     api.reviews().then(({ reviews }) => reviews && setReviews(reviews)).catch(() => {});
   }, [loadJobs]);
 
+  // Auto-refresh jobs while logged in: every 30s in the background, and
+  // immediately whenever the app regains focus (user switches back / screen on).
+  // New assigned jobs and status changes then appear without a manual reload.
+  // Form inputs live in local component state, so a refresh never wipes them.
+  useEffect(() => {
+    if (!loggedIn || !live) return;
+    const timer = setInterval(loadJobs, 30000);
+    const onVisible = () => { if (document.visibilityState === "visible") loadJobs(); };
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("focus", loadJobs);
+    return () => {
+      clearInterval(timer);
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("focus", loadJobs);
+    };
+  }, [loggedIn, live, loadJobs]);
+
   // Called by Login after a successful OTP verify.
   const startLive = useCallback(async (token, u) => {
     setToken(token);

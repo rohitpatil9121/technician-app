@@ -35,9 +35,9 @@ export const issueTypes = [
 ];
 
 export const chargeTypes = [
-  { id: "service", label: "Service Charge", amount: 400 },
-  { id: "visit", label: "Visit Charge", amount: 250 },
-  { id: "warranty", label: "No Visit Charge (Under Warranty)", amount: 0 },
+  { id: "service", label: "Service Charge (repair done)", amount: 250 },
+  { id: "visit", label: "Visit Charge (no repair)", amount: 250 },
+  { id: "warranty", label: "No Charge (Under Warranty)", amount: 0 },
   { id: "repeat", label: "Repeat Call (within 10 days)", amount: 0 },
 ];
 
