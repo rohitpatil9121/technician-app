@@ -4,6 +4,7 @@ import { useJobs } from "../store/JobsContext.jsx";
 import { chargeTypes } from "../data/mock.js";
 import { stepIndexForStatus } from "../lib/workflow.js";
 import { rupee, rupeeAmt } from "../lib/format.js";
+import { callPhone, openMaps } from "../lib/contact.js";
 import {
   Icon, Tag, StatusPill, Stepper, Card, PrimaryButton, GhostButton,
   Field, input, cx,
@@ -355,8 +356,8 @@ function ContextCards({ job }) {
         </div>
         {job.tags?.length > 0 && <div className="mt-2 flex flex-wrap gap-1.5">{job.tags.map((t) => <Tag key={t}>{t}</Tag>)}</div>}
         <div className="mt-3 grid grid-cols-2 gap-2">
-          <GhostButton><Icon.phone width={16} height={16} /> Call Customer</GhostButton>
-          <GhostButton className="!border-ok/30 !text-ok"><Icon.map width={16} height={16} /> Open Maps</GhostButton>
+          <GhostButton onClick={() => callPhone(job.phone)} disabled={!job.phone}><Icon.phone width={16} height={16} /> Call Customer</GhostButton>
+          <GhostButton className="!border-ok/30 !text-ok" onClick={() => openMaps(job.address)} disabled={!job.address}><Icon.map width={16} height={16} /> Open Maps</GhostButton>
         </div>
       </Card>
 

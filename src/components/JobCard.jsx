@@ -1,5 +1,6 @@
 import { useNavigate } from "react-router-dom";
 import { rupee } from "../lib/format.js";
+import { callPhone, openMaps } from "../lib/contact.js";
 import { Icon, Tag, StatusPill, GhostButton, PrimaryButton, cx } from "./ui.jsx";
 
 export default function JobCard({ job }) {
@@ -38,8 +39,8 @@ export default function JobCard({ job }) {
       )}
 
       <div className="mt-3 grid grid-cols-[1fr_1fr_1.1fr] gap-2">
-        <GhostButton><Icon.phone width={16} height={16} /> Call</GhostButton>
-        <GhostButton className="!border-ok/30 !text-ok"><Icon.map width={16} height={16} /> Maps</GhostButton>
+        <GhostButton onClick={() => callPhone(job.phone)} disabled={!job.phone}><Icon.phone width={16} height={16} /> Call</GhostButton>
+        <GhostButton className="!border-ok/30 !text-ok" onClick={() => openMaps(job.address)} disabled={!job.address}><Icon.map width={16} height={16} /> Maps</GhostButton>
         <PrimaryButton className="!py-3 !text-sm" onClick={() => nav(`/job/${job.id}`)}>
           Open <Icon.chevron width={16} height={16} />
         </PrimaryButton>

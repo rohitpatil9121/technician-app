@@ -46,6 +46,7 @@ export const jobsSeed = [
   {
     id: "J-1001",
     name: "Mr. Joshi",
+    phone: "+919812345670",
     area: "Hinjewadi",
     address: "B-302, Megapolis, Hinjewadi Phase 3, Pune 411057",
     when: "Yesterday 4:00 PM",
@@ -60,6 +61,7 @@ export const jobsSeed = [
   {
     id: "J-1002",
     name: "Mr. Kulkarni",
+    phone: "+919812345671",
     area: "Baner",
     address: "Flat 9, Crystal Residency, Baner Road, Pune 411045",
     when: "Today 10:30 AM",
@@ -74,6 +76,7 @@ export const jobsSeed = [
   {
     id: "J-1003",
     name: "Mrs. Sharma",
+    phone: "+919812345672",
     area: "Wakad",
     address: "Flat 7, Rose Icon, Datta Mandir Road, Wakad, Pune 411057",
     when: "Today 12:00 PM",
@@ -88,6 +91,7 @@ export const jobsSeed = [
   {
     id: "J-1004",
     name: "Mr. Shaikh",
+    phone: "+919812345673",
     area: "Pimple Saudagar",
     address: "Sayli Heights, Pimple Saudagar, Pune 411027",
     when: "Today 2:30 PM",
@@ -102,6 +106,7 @@ export const jobsSeed = [
   {
     id: "J-1005",
     name: "Mrs. Deshpande",
+    phone: "+919812345674",
     area: "Kothrud",
     address: "Sahawas Society, Kothrud, Pune 411038",
     when: "Today 5:00 PM",
