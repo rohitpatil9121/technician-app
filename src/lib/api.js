@@ -11,6 +11,10 @@ const BASE = import.meta.env.VITE_API_BASE || "";
 export const getToken = () => localStorage.getItem(TOKEN_KEY);
 export const setToken = (t) => (t ? localStorage.setItem(TOKEN_KEY, t) : localStorage.removeItem(TOKEN_KEY));
 
+// URL for a WhatsApp media id, proxied+authed by the backend (/api/media/:id).
+// The token rides as ?t= because <img> can't send an Authorization header.
+export const mediaUrl = (id) => `${BASE}/api/media/${id}?t=${getToken() || ""}`;
+
 async function req(path, { method = "GET", body, auth = true } = {}) {
   const headers = { "Content-Type": "application/json" };
   const token = getToken();
@@ -35,10 +39,16 @@ export const api = {
   jobs: () => req("/tech/jobs"),
   job: (id) => req(`/tech/jobs/${id}`),
   step: (id, action, work) => req(`/tech/jobs/${id}/step`, { method: "POST", body: { action, work } }),
+  uploadPhoto: (id, image) => req(`/tech/jobs/${id}/photo`, { method: "POST", body: { image } }),
+  arrivalOtp: (id) => req(`/tech/jobs/${id}/arrival-otp`, { method: "POST" }),
+  verifyArrival: (id, code) => req(`/tech/jobs/${id}/verify-arrival`, { method: "POST", body: { code } }),
   parts: () => req("/tech/parts"),
   reviews: () => req("/tech/reviews"),
+  earnings: () => req("/tech/earnings"),
+  earningsToday: () => req("/tech/earnings/today"),
   setOnline: (is_online) => req("/tech/availability", { method: "PATCH", body: { is_online } }),
   savePushToken: (token) => req("/tech/push-token", { method: "POST", body: { token } }),
+  saveLocation: (lat, lng) => req("/tech/location", { method: "POST", body: { lat, lng } }),
 };
 
 // Coarse status (sent by JobDetail) → backend step action.

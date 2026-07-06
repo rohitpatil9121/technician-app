@@ -29,6 +29,8 @@ export const Icon = {
     <svg {...I(p)}><path d="M5 13a10 10 0 0 1 14 0" /><path d="M8.5 16.5a5 5 0 0 1 7 0" /><path d="M2 8.82a15 15 0 0 1 20 0" /><line x1="12" y1="20" x2="12" y2="20" /></svg>
   ),
   chevron: (p) => (<svg {...I(p)}><path d="m9 18 6-6-6-6" /></svg>),
+  search: (p) => (<svg {...I(p)}><circle cx="11" cy="11" r="8" /><path d="m21 21-4.3-4.3" /></svg>),
+  plus: (p) => (<svg {...I(p)}><path d="M12 5v14M5 12h14" /></svg>),
   chevronDown: (p) => (<svg {...I(p)}><path d="m6 9 6 6 6-6" /></svg>),
   back: (p) => (<svg {...I(p)}><path d="m15 18-6-6 6-6" /></svg>),
   check: (p) => (<svg {...I(p)}><path d="M20 6 9 17l-5-5" /></svg>),
@@ -47,6 +49,7 @@ export const Icon = {
   spark: (p) => (<svg {...I(p)}><path d="M12 3v4M12 17v4M3 12h4M17 12h4M5.6 5.6l2.8 2.8M15.6 15.6l2.8 2.8M18.4 5.6l-2.8 2.8M8.4 15.6l-2.8 2.8" /></svg>),
   wrench: (p) => (<svg {...I(p)}><path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3 18l3 3 6.3-6.3a4 4 0 0 0 5.4-5.4l-2.1 2.1-2.4-2.4z" /></svg>),
   logout: (p) => (<svg {...I(p)}><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" /><polyline points="16 17 21 12 16 7" /><line x1="21" y1="12" x2="9" y2="12" /></svg>),
+  wallet: (p) => (<svg {...I(p)}><path d="M21 12V7H5a2 2 0 0 1 0-4h14v4" /><path d="M3 5v14a2 2 0 0 0 2 2h16v-5" /><path d="M18 12a2 2 0 0 0 0 4h4v-4z" /></svg>),
 };
 
 /* --------------------------------- Tags --------------------------------- */
@@ -132,19 +135,22 @@ export const input =
   "w-full rounded-xl border border-slate-200 bg-white px-3.5 py-3 text-[15px] outline-none focus:border-brand focus:ring-2 focus:ring-brand-50";
 
 /* -------------------------------- Stepper ------------------------------- */
-export const Stepper = ({ currentIndex }) => (
+export const Stepper = ({ currentIndex, onStep }) => (
   <div className="no-scrollbar -mx-1 flex items-center gap-1 overflow-x-auto pb-1">
     {STEPS.map((s, i) => {
       const done = i < currentIndex;
       const active = i === currentIndex;
+      const clickable = onStep && done; // completed steps are tappable to go back & edit
       return (
         <div key={s.key} className="flex shrink-0 items-center">
           <div
+            onClick={clickable ? () => onStep(i) : undefined}
             className={cx(
               "flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold",
               active && "bg-brand text-white",
               done && "bg-ok-light text-ok",
-              !active && !done && "bg-slate-100 text-slate-400"
+              !active && !done && "bg-slate-100 text-slate-400",
+              clickable && "cursor-pointer"
             )}
           >
             <span className={cx("grid h-4 w-4 place-items-center rounded-full text-[10px]", active ? "bg-white/25" : done ? "bg-ok text-white" : "bg-slate-300 text-white")}>
@@ -174,6 +180,8 @@ export const BottomNav = () => {
     <nav className="sticky bottom-0 z-10 flex border-t border-slate-200 bg-white/95 backdrop-blur">
       <NavLink to="/home" className={cls}><Icon.home /> Home</NavLink>
       <NavLink to="/reviews" className={cls}><Icon.star width={20} height={20} /> Reviews</NavLink>
+      {/* Earnings tab hidden for now — re-enable when needed:
+      <NavLink to="/earnings" className={cls}><Icon.wallet width={20} height={20} /> Earnings</NavLink> */}
     </nav>
   );
 };

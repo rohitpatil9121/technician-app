@@ -80,6 +80,10 @@ export function JobsProvider({ children }) {
 
   const getJob = (id) => jobs.find((j) => j.id === id);
 
+  // Replace one job with a server-returned copy (used after custom endpoints
+  // like estimate verification that don't go through updateJob's action map).
+  const setJob = (job) => setJobs((prev) => prev.map((j) => (j.id === job.id ? job : j)));
+
   // Advance a job: optimistic local update, then persist in live mode.
   const updateJob = (id, patch) => {
     setJobs((prev) =>
@@ -102,7 +106,7 @@ export function JobsProvider({ children }) {
   };
 
   const value = useMemo(
-    () => ({ jobs, parts, reviews, user, online, setOnline, loggedIn, live, startLive, startDemo, logout, updateJob, getJob, loadJobs }),
+    () => ({ jobs, parts, reviews, user, online, setOnline, loggedIn, live, startLive, startDemo, logout, updateJob, getJob, setJob, loadJobs }),
     [jobs, parts, reviews, user, online, loggedIn, live, logout, loadJobs]
   );
 
