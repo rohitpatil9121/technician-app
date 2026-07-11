@@ -1,9 +1,10 @@
+import { useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { useJobs } from "../store/JobsContext.jsx";
 import { technician, repeatCalls, escalations } from "../data/mock.js";
 import AppHeader from "../components/AppHeader.jsx";
 import JobCard from "../components/JobCard.jsx";
-import { Icon, SectionLabel, cx } from "../components/ui.jsx";
+import { Icon, SectionLabel, SkeletonJobCard, EmptyState } from "../components/ui.jsx";
 
 function Stat({ icon, label, value }) {
   return (
@@ -15,20 +16,22 @@ function Stat({ icon, label, value }) {
 }
 
 export default function Home() {
-  const { jobs, user, reviews, live } = useJobs();
+  const { jobs, user, reviews, live, jobsLoading } = useJobs();
   const nav = useNavigate();
   const firstName = (user?.full_name || technician.name).split(" ")[0];
   const rating = live ? reviews?.average ?? "—" : technician.rating;
 
-  const closed = jobs.filter((j) => j.status === "CLOSED");
-  const pending = jobs.filter((j) => j.bucket === "pending" && j.status !== "CLOSED");
-  const today = jobs.filter((j) => j.bucket === "today" && j.status !== "CLOSED");
+  const { closed, pending, today, needsAction } = useMemo(() => ({
+    closed: jobs.filter((j) => j.status === "CLOSED"),
+    pending: jobs.filter((j) => j.bucket === "pending" && j.status !== "CLOSED"),
+    today: jobs.filter((j) => j.bucket === "today" && j.status !== "CLOSED"),
+    needsAction: jobs.filter((j) => j.status === "NEW" || j.status === "ESTIMATE_SENT"),
+  }), [jobs]);
 
   return (
     <>
       <AppHeader />
 
-      {/* Hero */}
       <div className="mt-1 rounded-2xl bg-gradient-to-br from-brand-light to-brand-dark p-4 text-white shadow-pop">
         <div className="text-sm text-white/85">Namaste 🙏</div>
         <div className="flex items-center gap-2 text-xl font-extrabold">
@@ -44,29 +47,48 @@ export default function Home() {
         </div>
       </div>
 
-      {pending.length > 0 && (
+      {needsAction.length > 0 && (
+        <div className="mt-3 flex items-center gap-2 rounded-xl border border-warn/30 bg-warn-light px-3 py-2.5">
+          <Icon.alert width={16} height={16} className="shrink-0 text-warn" />
+          <span className="text-sm text-slate-700">
+            <b>{needsAction.length}</b> job{needsAction.length === 1 ? "" : "s"} need{needsAction.length === 1 ? "s" : ""} your action
+          </span>
+        </div>
+      )}
+
+      {jobsLoading && live && jobs.length === 0 ? (
         <>
-          <SectionLabel>Pending from previous days</SectionLabel>
-          {pending.map((j) => <JobCard key={j.id} job={j} />)}
+          <SectionLabel>Loading jobs…</SectionLabel>
+          <SkeletonJobCard />
+          <SkeletonJobCard />
+        </>
+      ) : (
+        <>
+          {pending.length > 0 && (
+            <>
+              <SectionLabel>Pending from previous days</SectionLabel>
+              {pending.map((j) => <JobCard key={j.id} job={j} />)}
+            </>
+          )}
+
+          <SectionLabel>Today's jobs</SectionLabel>
+          {today.length > 0 ? (
+            today.map((j) => <JobCard key={j.id} job={j} />)
+          ) : (
+            <EmptyState icon={Icon.truck} title="No open jobs for today" sub="Pull down to refresh when new jobs are assigned" />
+          )}
+
+          <SectionLabel>Completed today</SectionLabel>
+          {closed.length > 0 ? (
+            closed.map((j) => <JobCard key={j.id} job={j} />)
+          ) : (
+            <EmptyState icon={Icon.checkCircle} title="None closed yet today" />
+          )}
         </>
       )}
 
-      <SectionLabel>Today's jobs</SectionLabel>
-      {today.length > 0 ? (
-        today.map((j) => <JobCard key={j.id} job={j} />)
-      ) : (
-        <EmptyRow text="No open jobs for today." />
-      )}
-
-      <SectionLabel>Completed today</SectionLabel>
-      {closed.length > 0 ? (
-        closed.map((j) => <JobCard key={j.id} job={j} />)
-      ) : (
-        <EmptyRow text="None closed yet today" />
-      )}
-
       {!live && <>
-      <SectionLabel>Repeat calls (within 10 days)</SectionLabel>
+      <SectionLabel>Repeat calls (within 7 days)</SectionLabel>
       {repeatCalls.map((r) => (
         <button
           key={r.id + r.days}
@@ -84,7 +106,7 @@ export default function Home() {
           <div className="text-xs text-slate-500">{r.area} • {r.model}</div>
           <div className="mt-0.5 text-sm text-slate-700">{r.issue}</div>
           <div className="mt-1 text-xs text-slate-400">
-            No charge: customer not billed again within 10-day window.
+            No charge: customer not billed again within 7-day window.
           </div>
         </button>
       ))}
@@ -105,9 +127,3 @@ export default function Home() {
     </>
   );
 }
-
-const EmptyRow = ({ text }) => (
-  <div className="rounded-2xl border border-dashed border-slate-200 bg-white/60 px-4 py-6 text-center text-sm text-slate-400">
-    {text}
-  </div>
-);

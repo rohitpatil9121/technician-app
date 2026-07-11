@@ -40,7 +40,7 @@ export default function AppHeader({ title }) {
   const rating = live ? reviews?.average ?? "—" : technician.rating;
 
   return (
-    <header className="sticky top-0 z-10 bg-slate-100/95 px-4 pb-2 pt-3 backdrop-blur">
+    <header className="safe-top sticky top-0 z-10 bg-slate-100/95 px-4 pb-2 pt-3 backdrop-blur">
       <div className="flex items-center justify-between">
         <div>
           <div className="text-xs text-slate-400">{todayLabel()}</div>

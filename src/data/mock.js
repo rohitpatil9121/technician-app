@@ -38,7 +38,7 @@ export const chargeTypes = [
   { id: "service", label: "Service Charge (repair done)", amount: 250 },
   { id: "visit", label: "Visit Charge (no repair)", amount: 250 },
   { id: "warranty", label: "No Charge (Under Warranty)", amount: 0 },
-  { id: "repeat", label: "Repeat Call (within 10 days)", amount: 0 },
+  { id: "repeat", label: "Repeat Call (within 7 days)", amount: 0 },
 ];
 
 // Each job == a ticket assigned to this technician.
@@ -154,8 +154,15 @@ export const reviews = {
   thisWeek: 4.8,
   jobsRated: 14,
   fiveStar: 9,
-  topStreak: 4.9,
-  needsWork: 4.2,
+  topStreak: 5,
+  needsWork: 3,
+  distribution: [
+    { stars: 5, count: 9 },
+    { stars: 4, count: 3 },
+    { stars: 3, count: 1 },
+    { stars: 2, count: 0 },
+    { stars: 1, count: 1 },
+  ],
   categories: [
     { label: "Polite & friendly behaviour", score: 4.9 },
     { label: "First-time fix success", score: 4.8 },
@@ -164,9 +171,9 @@ export const reviews = {
     { label: "Clear communication", score: 4.7 },
   ],
   recent: [
-    { name: "Mrs. Sharma", stars: 5, text: "Very polite. Fixed leak quickly." },
-    { name: "Mr. Patel", stars: 4, text: "Good service, came on time." },
-    { name: "Mrs. Iyer", stars: 3, text: "Repeated complaint after 3 days." },
+    { name: "Mrs. Sharma", stars: 5, label: "Excellent", text: "Very polite. Fixed leak quickly.", at: new Date(Date.now() - 3600000).toISOString(), ticket: "OG-070726-0001" },
+    { name: "Mr. Patel", stars: 4, label: "Good", text: "Good service, came on time.", at: new Date(Date.now() - 86400000).toISOString(), ticket: "OG-070725-0012" },
+    { name: "Mrs. Iyer", stars: 3, label: "Okay", text: "Repeated complaint after 3 days.", at: new Date(Date.now() - 172800000).toISOString(), ticket: "OG-070724-0008" },
   ],
 };
 
@@ -192,7 +199,7 @@ export const helpGuides = [
 export const helpScripts = [
   {
     title: "How to explain the visit charge",
-    body: "The visit charge covers travel + on-site diagnosis. It is waived under warranty / AMC and for a repeat call within 10 days.",
+    body: "The visit charge covers travel + on-site diagnosis. It is waived under warranty / AMC and for a repeat call within 7 days.",
   },
   {
     title: "How to explain TDS reading",

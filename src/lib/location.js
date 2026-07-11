@@ -7,7 +7,7 @@ import { api } from "./api.js";
 
 let watchId = null;
 let lastSent = 0;
-const MIN_INTERVAL = 20000; // send at most every 20s
+const MIN_INTERVAL = 30000;
 
 export async function startLocationTracking() {
   if (!Capacitor.isNativePlatform() || watchId) return;
@@ -19,7 +19,7 @@ export async function startLocationTracking() {
     if (perm.location !== "granted" && perm.coarseLocation !== "granted") return;
 
     watchId = await Geolocation.watchPosition(
-      { enableHighAccuracy: true, timeout: 20000 },
+      { enableHighAccuracy: false, timeout: 25000, maximumAge: 15000 },
       (pos) => {
         if (!pos?.coords) return;
         const now = Date.now();

@@ -49,6 +49,7 @@ export const Icon = {
   spark: (p) => (<svg {...I(p)}><path d="M12 3v4M12 17v4M3 12h4M17 12h4M5.6 5.6l2.8 2.8M15.6 15.6l2.8 2.8M18.4 5.6l-2.8 2.8M8.4 15.6l-2.8 2.8" /></svg>),
   wrench: (p) => (<svg {...I(p)}><path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3 18l3 3 6.3-6.3a4 4 0 0 0 5.4-5.4l-2.1 2.1-2.4-2.4z" /></svg>),
   logout: (p) => (<svg {...I(p)}><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" /><polyline points="16 17 21 12 16 7" /><line x1="21" y1="12" x2="9" y2="12" /></svg>),
+  whatsapp: (p) => (<svg {...I({ fill: "currentColor", stroke: "none", ...p })}><path d="M17.47 14.38c-.3-.15-1.76-.87-2.03-.97-.27-.1-.47-.15-.67.15-.2.3-.77.97-.94 1.17-.17.2-.35.22-.64.07-.3-.15-1.26-.46-2.39-1.47-.88-.79-1.48-1.76-1.65-2.06-.17-.3-.02-.46.13-.61.13-.13.3-.35.44-.52.15-.17.2-.3.3-.5.1-.2.05-.37-.02-.52-.08-.15-.67-1.62-.92-2.22-.24-.58-.49-.5-.67-.51h-.57c-.2 0-.52.07-.8.37-.27.3-1.04 1.02-1.04 2.5 0 1.47 1.07 2.89 1.22 3.09.15.2 2.1 3.2 5.08 4.49.71.3 1.26.49 1.7.62.71.23 1.36.2 1.87.12.57-.08 1.76-.72 2.01-1.42.25-.69.25-1.29.17-1.42-.07-.12-.27-.2-.57-.35zM12.05 21.79h-.01a9.87 9.87 0 0 1-5.03-1.38l-.36-.21-3.74.98 1-3.65-.24-.37a9.86 9.86 0 0 1-1.51-5.26c0-5.45 4.44-9.88 9.9-9.88a9.83 9.83 0 0 1 7 2.9 9.83 9.83 0 0 1 2.89 7c0 5.45-4.44 9.87-9.9 9.87zm8.42-18.3A11.82 11.82 0 0 0 12.05 0C5.5 0 .16 5.34.16 11.9c0 2.1.55 4.15 1.59 5.95L.06 24l6.3-1.65a11.9 11.9 0 0 0 5.68 1.45h.01c6.55 0 11.89-5.34 11.89-11.9 0-3.18-1.24-6.17-3.47-8.41z" /></svg>),
   wallet: (p) => (<svg {...I(p)}><path d="M21 12V7H5a2 2 0 0 1 0-4h14v4" /><path d="M3 5v14a2 2 0 0 0 2 2h16v-5" /><path d="M18 12a2 2 0 0 0 0 4h4v-4z" /></svg>),
 };
 
@@ -97,6 +98,35 @@ export const SectionLabel = ({ children, right }) => (
 
 export const Card = ({ children, className }) => (
   <div className={cx("rounded-2xl border border-slate-200 bg-white p-4 shadow-card", className)}>{children}</div>
+);
+
+export const Skeleton = ({ className }) => (
+  <div className={cx("skeleton", className)} aria-hidden="true" />
+);
+
+export const SkeletonJobCard = () => (
+  <div className="mb-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-card">
+    <div className="flex justify-between">
+      <Skeleton className="h-5 w-32" />
+      <Skeleton className="h-5 w-16 rounded-full" />
+    </div>
+    <Skeleton className="mt-2 h-3 w-40" />
+    <Skeleton className="mt-3 h-4 w-full" />
+    <Skeleton className="mt-1 h-3 w-24" />
+    <div className="mt-3 grid grid-cols-3 gap-2">
+      <Skeleton className="h-10 rounded-xl" />
+      <Skeleton className="h-10 rounded-xl" />
+      <Skeleton className="h-10 rounded-xl" />
+    </div>
+  </div>
+);
+
+export const EmptyState = ({ icon: I, title, sub }) => (
+  <div className="rounded-2xl border border-dashed border-slate-200 bg-white/60 px-4 py-8 text-center">
+    {I && <I width={32} height={32} className="mx-auto text-slate-200" />}
+    <div className="mt-2 text-sm font-medium text-slate-500">{title}</div>
+    {sub && <div className="mt-1 text-xs text-slate-400">{sub}</div>}
+  </div>
 );
 
 export const PrimaryButton = ({ children, className, ...rest }) => (
@@ -168,7 +198,7 @@ export const Stepper = ({ currentIndex, onStep }) => (
 /* -------------------------------- Shell --------------------------------- */
 // Centers the app in a phone-width column so it looks right on desktop too.
 export const Shell = ({ children }) => (
-  <div className="mx-auto flex min-h-screen w-full max-w-[440px] flex-col bg-slate-100 shadow-pop">
+  <div className="safe-x mx-auto flex min-h-screen w-full max-w-[440px] flex-col bg-slate-100 shadow-pop">
     {children}
   </div>
 );
@@ -177,7 +207,7 @@ export const BottomNav = () => {
   const item = "flex flex-1 flex-col items-center gap-0.5 py-2 text-[11px] font-medium";
   const cls = ({ isActive }) => cx(item, isActive ? "text-brand" : "text-slate-400");
   return (
-    <nav className="sticky bottom-0 z-10 flex border-t border-slate-200 bg-white/95 backdrop-blur">
+    <nav className="safe-bottom sticky bottom-0 z-10 flex border-t border-slate-200 bg-white/95 backdrop-blur">
       <NavLink to="/home" className={cls}><Icon.home /> Home</NavLink>
       <NavLink to="/reviews" className={cls}><Icon.star width={20} height={20} /> Reviews</NavLink>
       {/* Earnings tab hidden for now — re-enable when needed:

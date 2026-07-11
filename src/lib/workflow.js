@@ -39,3 +39,18 @@ export const STATUS_META = {
   PAID: { label: "Paid", tone: "ok" },
   CLOSED: { label: "Closed", tone: "ok" },
 };
+
+// Left accent stripe on job cards.
+export const STATUS_STRIPE = {
+  NEW: "border-l-brand",
+  ACCEPTED: "border-l-brand",
+  ON_THE_WAY: "border-l-warn",
+  ARRIVED: "border-l-brand-light",
+  DIAGNOSED: "border-l-brand",
+  ESTIMATE_SENT: "border-l-warn",
+  VERIFIED: "border-l-ok",
+  REJECTED: "border-l-danger",
+  WORK_DONE: "border-l-ok",
+  PAID: "border-l-ok",
+  CLOSED: "border-l-ok",
+};

@@ -1,8 +1,14 @@
-import { createContext, useContext, useEffect, useMemo, useState, useCallback } from "react";
+import { createContext, useContext, useEffect, useMemo, useState, useCallback, useRef } from "react";
 import { jobsSeed, partsCatalog as mockParts, reviews as mockReviews } from "../data/mock.js";
+import { App } from "@capacitor/app";
 import { api, getToken, setToken, STATUS_TO_ACTION } from "../lib/api.js";
 
 const JobsContext = createContext(null);
+const POLL_MS = 30000;
+const RESUME_DEBOUNCE_MS = 1500;
+
+const jobsSig = (list) =>
+  (list || []).map((j) => `${j.id}:${j.status}:${j.work?.tech_status || ""}`).join("|");
 
 export function JobsProvider({ children }) {
   const [live, setLive] = useState(() => !!getToken());
@@ -12,53 +18,94 @@ export function JobsProvider({ children }) {
   const [reviews, setReviews] = useState(mockReviews);
   const [user, setUser] = useState(null);
   const [online, setOnlineState] = useState(true);
+  const [jobsLoading, setJobsLoading] = useState(false);
+  const hasJobsRef = useRef(false);
 
-  const loadJobs = useCallback(async () => {
+  const loadJobs = useCallback(async ({ background = false } = {}) => {
     if (!getToken()) return;
+    if (!background && !hasJobsRef.current) setJobsLoading(true);
     try {
-      const { jobs } = await api.jobs();
-      setJobs(jobs);
+      const { jobs: rows } = await api.jobs();
+      setJobs((prev) => (jobsSig(prev) === jobsSig(rows) ? prev : rows));
+      hasJobsRef.current = true;
     } catch (e) { console.error("loadJobs:", e.message); }
+    finally {
+      if (!background) setJobsLoading(false);
+    }
   }, []);
 
-  // Returning user (token already stored) → live mode + load data.
+  const loadReviews = useCallback(async () => {
+    if (!getToken()) return;
+    try {
+      const { reviews: next } = await api.reviews();
+      if (next) {
+        setReviews((prev) => {
+          const a = JSON.stringify(prev);
+          const b = JSON.stringify(next);
+          return a === b ? prev : next;
+        });
+      }
+    } catch (e) { console.error("loadReviews:", e.message); }
+  }, []);
+
   useEffect(() => {
     if (!getToken()) return;
     loadJobs();
-    api.me().then(({ user }) => user && setUser(user)).catch(() => {});
-    api.parts().then(({ parts }) => parts?.length && setParts(parts)).catch(() => {});
-    api.reviews().then(({ reviews }) => reviews && setReviews(reviews)).catch(() => {});
-  }, [loadJobs]);
+    loadReviews();
+    api.me().then(({ user: u }) => u && setUser(u)).catch(() => {});
+    api.parts().then(({ parts: p }) => p?.length && setParts(p)).catch(() => {});
+  }, [loadJobs, loadReviews]);
 
-  // Auto-refresh jobs while logged in: every 30s in the background, and
-  // immediately whenever the app regains focus (user switches back / screen on).
-  // New assigned jobs and status changes then appear without a manual reload.
-  // Form inputs live in local component state, so a refresh never wipes them.
   useEffect(() => {
-    if (!loggedIn || !live) return;
-    const timer = setInterval(loadJobs, 30000);
-    const onVisible = () => { if (document.visibilityState === "visible") loadJobs(); };
+    if (!loggedIn) return;
+    let reviewTick = 0;
+    let resumeTimer;
+    const refreshJobs = () => loadJobs({ background: true });
+    const refreshAll = () => {
+      refreshJobs();
+      loadReviews();
+    };
+    const scheduleResumeRefresh = () => {
+      clearTimeout(resumeTimer);
+      resumeTimer = setTimeout(refreshAll, RESUME_DEBOUNCE_MS);
+    };
+
+    const timer = setInterval(() => {
+      refreshJobs();
+      reviewTick += 1;
+      if (reviewTick % 2 === 0) loadReviews();
+    }, POLL_MS);
+
+    const onVisible = () => {
+      if (document.visibilityState === "visible") scheduleResumeRefresh();
+    };
     document.addEventListener("visibilitychange", onVisible);
-    window.addEventListener("focus", loadJobs);
+    window.addEventListener("focus", scheduleResumeRefresh);
+
+    let appSub;
+    App.addListener("appStateChange", ({ isActive }) => { if (isActive) scheduleResumeRefresh(); })
+      .then((h) => { appSub = h; })
+      .catch(() => {});
+
     return () => {
       clearInterval(timer);
+      clearTimeout(resumeTimer);
       document.removeEventListener("visibilitychange", onVisible);
-      window.removeEventListener("focus", loadJobs);
+      window.removeEventListener("focus", scheduleResumeRefresh);
+      appSub?.remove?.();
     };
-  }, [loggedIn, live, loadJobs]);
+  }, [loggedIn, loadJobs, loadReviews]);
 
-  // Called by Login after a successful OTP verify.
   const startLive = useCallback(async (token, u) => {
     setToken(token);
     setLive(true);
     setLoggedIn(true);
     if (u) setUser(u);
     await loadJobs();
-    api.parts().then(({ parts }) => parts?.length && setParts(parts)).catch(() => {});
-    api.reviews().then(({ reviews }) => reviews && setReviews(reviews)).catch(() => {});
-  }, [loadJobs]);
+    await loadReviews();
+    api.parts().then(({ parts: p }) => p?.length && setParts(p)).catch(() => {});
+  }, [loadJobs, loadReviews]);
 
-  // Demo Login → mock data, no backend.
   const startDemo = useCallback(() => {
     setToken(null);
     setLive(false);
@@ -66,26 +113,26 @@ export function JobsProvider({ children }) {
     setParts(mockParts);
     setReviews(mockReviews);
     setLoggedIn(true);
+    hasJobsRef.current = true;
   }, []);
 
-  // Sign out: drop the token and reset to the logged-out state. The <App>
-  // route guard then redirects to the login screen.
   const logout = useCallback(() => {
     setToken(null);
     setLive(false);
     setLoggedIn(false);
     setUser(null);
     setJobs([]);
+    hasJobsRef.current = false;
   }, []);
 
-  const getJob = (id) => jobs.find((j) => j.id === id);
+  const getJob = useCallback((id) => jobs.find((j) => j.id === id), [jobs]);
 
-  // Replace one job with a server-returned copy (used after custom endpoints
-  // like estimate verification that don't go through updateJob's action map).
-  const setJob = (job) => setJobs((prev) => prev.map((j) => (j.id === job.id ? job : j)));
+  const setJob = useCallback(
+    (job) => setJobs((prev) => prev.map((j) => (j.id === job.id ? job : j))),
+    []
+  );
 
-  // Advance a job: optimistic local update, then persist in live mode.
-  const updateJob = (id, patch) => {
+  const updateJob = useCallback((id, patch) => {
     setJobs((prev) =>
       prev.map((j) =>
         j.id === id ? { ...j, ...patch, work: { ...j.work, ...(patch.work || {}) } } : j
@@ -95,19 +142,24 @@ export function JobsProvider({ children }) {
       api
         .step(id, STATUS_TO_ACTION[patch.status], patch.work || {})
         .then(({ job }) => setJobs((prev) => prev.map((j) => (j.id === id ? job : j))))
-        .catch((e) => { console.error("step:", e.message); loadJobs(); });
+        .catch((e) => { console.error("step:", e.message); loadJobs({ background: true }); });
     }
-  };
+  }, [live, loadJobs]);
 
-  const setOnline = (v) => {
-    const next = typeof v === "function" ? v(online) : v;
-    setOnlineState(next);
-    if (live) api.setOnline(next).catch(() => {});
-  };
+  const setOnline = useCallback((v) => {
+    setOnlineState((prev) => {
+      const next = typeof v === "function" ? v(prev) : v;
+      if (live) api.setOnline(next).catch(() => {});
+      return next;
+    });
+  }, [live]);
 
   const value = useMemo(
-    () => ({ jobs, parts, reviews, user, online, setOnline, loggedIn, live, startLive, startDemo, logout, updateJob, getJob, setJob, loadJobs }),
-    [jobs, parts, reviews, user, online, loggedIn, live, logout, loadJobs]
+    () => ({
+      jobs, parts, reviews, user, online, jobsLoading, setOnline, loggedIn, live,
+      startLive, startDemo, logout, updateJob, getJob, setJob, loadJobs, loadReviews,
+    }),
+    [jobs, parts, reviews, user, online, jobsLoading, loggedIn, live, logout, loadJobs, loadReviews, setOnline, updateJob, getJob, setJob, startLive, startDemo]
   );
 
   return <JobsContext.Provider value={value}>{children}</JobsContext.Provider>;

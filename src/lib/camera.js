@@ -6,8 +6,8 @@ import { Capacitor } from "@capacitor/core";
 export async function takePhoto() {
   if (!Capacitor.isNativePlatform()) throw new Error("Camera is available in the installed app only.");
   const photo = await Camera.getPhoto({
-    quality: 55,
-    width: 1024,
+    quality: 50,
+    width: 960,
     resultType: CameraResultType.DataUrl,
     source: CameraSource.Prompt,
   });

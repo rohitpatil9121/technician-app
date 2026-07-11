@@ -1,17 +1,27 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 
-// Mobile-first technician PWA.
-// `host: true` exposes the dev server on the local network so you can open it
-// on a real phone (e.g. http://<your-pc-ip>:5174) while developing.
 export default defineConfig({
   plugins: [react()],
+  build: {
+    target: "es2020",
+    cssMinify: true,
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (id.includes("node_modules/react") || id.includes("node_modules/react-dom") || id.includes("react-router")) {
+            return "vendor";
+          }
+          if (id.includes("node_modules/qrcode")) return "qr";
+        },
+      },
+    },
+  },
   server: {
     host: true,
     port: 5174,
     proxy: {
-      // Wire to the same backend as the dashboard when the /api/tech/* routes exist.
-      "/api": { target: "http://127.0.0.1:3000", changeOrigin: true },
+      "/api": { target: process.env.VITE_PROXY_TARGET || "http://127.0.0.1:3000", changeOrigin: true },
     },
   },
 });

@@ -8,6 +8,14 @@ export function callPhone(phone) {
   window.location.href = `tel:${p}`;
 }
 
+// Open a WhatsApp chat with the customer. wa.me wants digits only (with country
+// code, no +). Deep-links into the WhatsApp app on phones.
+export function openWhatsApp(phone) {
+  const p = String(phone || "").replace(/\D/g, "");
+  if (!p) return;
+  window.open(`https://wa.me/${p}`, "_blank", "noopener");
+}
+
 // Open the address in Google Maps. On phones this deep-links into the Maps app;
 // on desktop it opens maps in a new tab.
 export function openMaps(address) {

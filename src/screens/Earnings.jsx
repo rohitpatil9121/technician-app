@@ -144,7 +144,7 @@ export default function Earnings() {
                   day ? "cursor-pointer" : "cursor-default",
                   isSel ? "bg-brand text-white shadow-sm"
                     : day ? "bg-brand-50 text-brand-dark hover:bg-brand-100"
-                    : "text-slate-300",
+                      : "text-slate-300",
                   isToday && !isSel && "ring-1 ring-brand/40"
                 )}>
                 <span className={cx("font-semibold", day && !isSel && "text-slate-600")}>{d}</span>

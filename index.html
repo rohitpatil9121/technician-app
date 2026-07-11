@@ -13,6 +13,20 @@
     <meta name="apple-mobile-web-app-title" content="Technician" />
     <link rel="manifest" href="/manifest.webmanifest" />
     <title>Oasis Globe — Technician App</title>
+    <script>
+      // Before React boots: restore #/job/… after camera/gallery killed the WebView.
+      (function () {
+        try {
+          var busy = localStorage.getItem("og-tech-photo-busy");
+          var path = localStorage.getItem("og-tech-resume-path");
+          if (busy !== "1" || !path || path.indexOf("/job/") !== 0) return;
+          var want = "#" + path;
+          if (location.hash !== want) {
+            location.replace(location.pathname + location.search + want);
+          }
+        } catch (e) {}
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>
