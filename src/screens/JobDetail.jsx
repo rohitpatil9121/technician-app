@@ -90,6 +90,8 @@ function JobDetailInner({ job }) {
   const [busy, setBusy] = useState(false);
   /* modals */
   const [showCust, setShowCust] = useState(false);
+  /* estimate must be shown to the customer once before it can be sent */
+  const [estimateShown, setEstimateShown] = useState(false);
   const [showQr, setShowQr] = useState(false);
   const [photoBusy, setPhotoBusy] = useState(false);
   const [upiProofUrl, setUpiProofUrl] = useState(null);
@@ -440,9 +442,14 @@ function JobDetailInner({ job }) {
       </>
     );
     footer = (
-      <div className="grid grid-cols-2 gap-2">
-        <GhostButton onClick={() => setShowCust(true)}>Show Customer</GhostButton>
-        <PrimaryButton disabled={priceInvalid} onClick={() => advance("ESTIMATE_SENT", { parts, charge, problems, total: estTotal })}>Send Estimate</PrimaryButton>
+      <div className="space-y-2">
+        {!estimateShown && (
+          <p className="text-center text-xs text-slate-400">Tap “Show Customer” once before sending the estimate.</p>
+        )}
+        <div className="grid grid-cols-2 gap-2">
+          <GhostButton onClick={() => { setShowCust(true); setEstimateShown(true); }}>Show Customer</GhostButton>
+          <PrimaryButton disabled={priceInvalid || !estimateShown} onClick={() => advance("ESTIMATE_SENT", { parts, charge, problems, total: estTotal })}>Send Estimate</PrimaryButton>
+        </div>
       </div>
     );
 
