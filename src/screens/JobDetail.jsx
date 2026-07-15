@@ -93,6 +93,8 @@ function JobDetailInner({ job }) {
   /* estimate must be shown to the customer once before it can be sent */
   const [estimateShown, setEstimateShown] = useState(false);
   const [showQr, setShowQr] = useState(false);
+  /* confirm before finalizing a full-cash collection */
+  const [showCashConfirm, setShowCashConfirm] = useState(false);
   const [photoBusy, setPhotoBusy] = useState(false);
   const [upiProofUrl, setUpiProofUrl] = useState(null);
   /* split payment: cash portion (rest goes on UPI) */
@@ -264,6 +266,18 @@ function JobDetailInner({ job }) {
               </div>
             )}
           </Card>
+          {job.customerPhotos?.length > 0 && (
+            <Card className="mt-3 w-full max-w-xs !py-3 text-left">
+              <div className="flex items-center gap-1.5 text-sm font-semibold text-brand-dark"><Icon.camera width={15} height={15} /> Customer photos</div>
+              <div className="mt-2 flex gap-2 overflow-x-auto">
+                {job.customerPhotos.map((cid) => (
+                  <a key={cid} href={mediaUrl(cid)} target="_blank" rel="noreferrer" className="shrink-0">
+                    <img src={mediaUrl(cid)} alt="Customer purifier" className="h-20 w-20 rounded-lg border border-slate-200 object-cover" />
+                  </a>
+                ))}
+              </div>
+            </Card>
+          )}
           <div className="mt-5 grid w-full max-w-xs grid-cols-2 gap-2">
             <GhostButton onClick={() => nav("/home")}>Back to Jobs</GhostButton>
             <PrimaryButton className="!py-3" onClick={() => nav("/reviews")}>My Reviews</PrimaryButton>
@@ -540,7 +554,7 @@ function JobDetailInner({ job }) {
     footer = (
       <div className="space-y-2">
         <PrimaryButton disabled={upiDue <= 0} onClick={() => setShowQr(true)}><Icon.qr width={18} height={18} /> Show UPI QR{cashN > 0 ? ` — ${rupeeAmt(upiDue)}` : ""}</PrimaryButton>
-        <GhostButton onClick={markCashFull}>Full Cash ({rupeeAmt(billTotal)})</GhostButton>
+        <GhostButton onClick={() => setShowCashConfirm(true)}>Full Cash ({rupeeAmt(billTotal)})</GhostButton>
       </div>
     );
 
@@ -563,7 +577,7 @@ function JobDetailInner({ job }) {
 
   return (
     <Shell job={job} nav={nav} onBack={() => { leaveJobScreen(); nav("/home"); }}>
-      <main className="flex-1 overflow-y-auto px-4 pb-4">
+      <main className="flex-1 min-h-0 overflow-y-auto px-4 pb-4">
         <ContextCards job={job} onPhotoClick={setPhotoPreview} />
         <div className="mt-4 animate-in">{body}</div>
       </main>
@@ -571,6 +585,15 @@ function JobDetailInner({ job }) {
 
       {photoPreview && (
         <ImagePreview src={photoPreview} onClose={() => setPhotoPreview(null)} />
+      )}
+
+      {/* Full-cash collection confirmation */}
+      {showCashConfirm && (
+        <Modal onClose={() => setShowCashConfirm(false)}>
+          <div className="text-center text-lg font-extrabold text-slate-800">Confirm {rupeeAmt(billTotal)} cash collected?</div>
+          <PrimaryButton className="mt-4 w-full" onClick={() => { setShowCashConfirm(false); markCashFull(); }}><Icon.check width={18} height={18} /> Yes</PrimaryButton>
+          <GhostButton className="mt-2 w-full" onClick={() => setShowCashConfirm(false)}>No</GhostButton>
+        </Modal>
       )}
 
       {/* Start Travel confirmation */}
@@ -639,7 +662,7 @@ function Shell({ job, nav, onBack, children }) {
   const stepIdx = job.status === "CLOSED" ? STEPS.length : stepIndexForStatus(job.status);
   const goBack = onBack || (() => nav("/home"));
   return (
-    <div className="safe-x flex min-h-screen flex-col bg-slate-100">
+    <div className="safe-x flex h-full min-h-0 flex-col overflow-hidden bg-slate-100">
       <header className="safe-top sticky top-0 z-10 bg-white px-3 pb-2 pt-3 shadow-sm">
         <div className="flex items-center justify-between">
           <button onClick={goBack} className="grid h-9 w-9 place-items-center rounded-full text-slate-600 hover:bg-slate-100"><Icon.back /></button>

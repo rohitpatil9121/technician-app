@@ -198,7 +198,7 @@ export const Stepper = ({ currentIndex, onStep }) => (
 /* -------------------------------- Shell --------------------------------- */
 // Centers the app in a phone-width column so it looks right on desktop too.
 export const Shell = ({ children }) => (
-  <div className="safe-x mx-auto flex min-h-screen w-full max-w-[440px] flex-col bg-slate-100 shadow-pop">
+  <div className="safe-x mx-auto flex h-screen min-h-0 w-full max-w-[440px] flex-col overflow-hidden bg-slate-100 shadow-pop">
     {children}
   </div>
 );
