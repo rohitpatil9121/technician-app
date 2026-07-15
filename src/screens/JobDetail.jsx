@@ -95,6 +95,8 @@ function JobDetailInner({ job }) {
   const [showQr, setShowQr] = useState(false);
   /* confirm before finalizing a full-cash collection */
   const [showCashConfirm, setShowCashConfirm] = useState(false);
+  /* confirm before finalizing a UPI / split payment */
+  const [showUpiConfirm, setShowUpiConfirm] = useState(false);
   const [photoBusy, setPhotoBusy] = useState(false);
   const [upiProofUrl, setUpiProofUrl] = useState(null);
   /* split payment: cash portion (rest goes on UPI) */
@@ -272,7 +274,7 @@ function JobDetailInner({ job }) {
               <div className="mt-2 flex gap-2 overflow-x-auto">
                 {job.customerPhotos.map((cid) => (
                   <a key={cid} href={mediaUrl(cid)} target="_blank" rel="noreferrer" className="shrink-0">
-                    <img src={mediaUrl(cid)} alt="Customer purifier" className="h-20 w-20 rounded-lg border border-slate-200 object-cover" />
+                    <img src={mediaUrl(cid)} alt="" onError={(e) => { const w = e.currentTarget.closest("a"); if (w) w.style.display = "none"; }} className="h-20 w-20 rounded-lg border border-slate-200 object-cover" />
                   </a>
                 ))}
               </div>
@@ -490,7 +492,9 @@ function JobDetailInner({ job }) {
           <GhostButton onClick={() => setShowCust(true)}>Show Estimate</GhostButton>
           <GhostButton onClick={() => advance("DIAGNOSED")}>✎ Edit &amp; Resend</GhostButton>
         </div>
-        <GhostButton className="!border-danger/30 !text-danger" onClick={() => advance("WORK_DONE", { charge: "visit", total: 250, visitOnly: true })}>Collect Visit Charge Only</GhostButton>
+        <div className="flex justify-center">
+          <GhostButton className="!border-danger/30 !text-danger" onClick={() => advance("WORK_DONE", { charge: "visit", total: 250, visitOnly: true })}>Collect Visit Charge Only</GhostButton>
+        </div>
       </div>
     );
 
@@ -524,7 +528,9 @@ function JobDetailInner({ job }) {
     footer = (
       <div className="space-y-2">
         <PrimaryButton onClick={() => advance("DIAGNOSED")}>Create Revised Estimate</PrimaryButton>
-        <GhostButton className="!border-danger/30 !text-danger" onClick={() => advance("WORK_DONE", { charge: "visit", total: 250, visitOnly: true })}>Collect Visit Charge Only</GhostButton>
+        <div className="flex justify-center">
+          <GhostButton className="!border-danger/30 !text-danger" onClick={() => advance("WORK_DONE", { charge: "visit", total: 250, visitOnly: true })}>Collect Visit Charge Only</GhostButton>
+        </div>
       </div>
     );
 
@@ -646,11 +652,20 @@ function JobDetailInner({ job }) {
           <PrimaryButton
             className="mt-4 w-full !bg-ok"
             disabled={!upiProofUrl || photoBusy}
-            onClick={() => { closeQrModal(); markUpiPaid(); }}
+            onClick={() => { setShowQr(false); setShowUpiConfirm(true); }}
           >
             <Icon.check width={18} height={18} /> Mark {cashN > 0 ? "Split" : "UPI"} Paid
           </PrimaryButton>
           <GhostButton className="mt-2 w-full" onClick={closeQrModal}>Cancel</GhostButton>
+        </Modal>
+      )}
+
+      {/* UPI / split payment confirmation */}
+      {showUpiConfirm && (
+        <Modal onClose={() => { setShowUpiConfirm(false); setShowQr(true); }}>
+          <div className="text-center text-lg font-extrabold text-slate-800">Confirm {rupeeAmt(billTotal)} received via {cashN > 0 ? "Cash + UPI" : "UPI"}?</div>
+          <PrimaryButton className="mt-4 w-full !bg-ok" onClick={() => { setShowUpiConfirm(false); setUpiProofUrl(null); markUpiPaid(); }}><Icon.check width={18} height={18} /> Yes</PrimaryButton>
+          <GhostButton className="mt-2 w-full" onClick={() => { setShowUpiConfirm(false); setShowQr(true); }}>No</GhostButton>
         </Modal>
       )}
     </Shell>
@@ -701,6 +716,10 @@ function ContextCards({ job, onPhotoClick }) {
   // Call/Map card is for getting to the customer — hide it once the technician
   // has reached (any status past ON_THE_WAY).
   const beforeArrival = job.status === "NEW" || job.status === "ON_THE_WAY";
+  // Drop any photo whose media fails to load (expired/invalid media id) so a
+  // broken-image placeholder never shows; hide the whole card if none load.
+  const [brokenPhotos, setBrokenPhotos] = useState(() => new Set());
+  const photos = (job.customerPhotos || []).filter((c) => !brokenPhotos.has(c));
   return (
     <>
       {beforeArrival && (
@@ -737,13 +756,13 @@ function ContextCards({ job, onPhotoClick }) {
         </div>
       ) : null}
 
-      {job.customerPhotos?.length > 0 && (
+      {photos.length > 0 && (
         <div className="mt-3 rounded-2xl border border-slate-200 bg-white p-4">
           <div className="flex items-center gap-1.5 text-sm font-semibold text-brand-dark"><Icon.camera width={15} height={15} /> Customer photos</div>
           <div className="mt-2 flex gap-2 overflow-x-auto">
-            {job.customerPhotos.map((cid) => (
+            {photos.map((cid) => (
               <button key={cid} type="button" onClick={() => onPhotoClick?.(mediaUrl(cid))} className="shrink-0">
-                <img src={mediaUrl(cid)} alt="Customer purifier" className="h-24 w-24 rounded-lg border border-slate-200 object-cover" />
+                <img src={mediaUrl(cid)} alt="" onError={() => setBrokenPhotos((b) => new Set(b).add(cid))} className="h-24 w-24 rounded-lg border border-slate-200 object-cover" />
               </button>
             ))}
           </div>

@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useJobs } from "../store/JobsContext.jsx";
 import { technician, repeatCalls, escalations } from "../data/mock.js";
@@ -16,8 +16,16 @@ function Stat({ icon, label, value }) {
 }
 
 export default function Home() {
-  const { jobs, user, reviews, live, jobsLoading } = useJobs();
+  const { jobs, user, reviews, live, jobsLoading, loadJobs } = useJobs();
   const nav = useNavigate();
+
+  // Customer ratings land AFTER a job closes (customer rates later), so the job
+  // list loaded earlier still has rating=null. Refresh in the background each time
+  // Home opens — otherwise a freshly-rated closed job shows no stars here even
+  // though the Reviews tab already has it.
+  useEffect(() => {
+    if (live) loadJobs({ background: true });
+  }, [live, loadJobs]);
   const firstName = (user?.full_name || technician.name).split(" ")[0];
   const rating = live ? reviews?.average ?? "—" : technician.rating;
 

@@ -133,6 +133,7 @@ export default function Login() {
         <p className="mt-6 text-center text-xs text-slate-400">
           OTP is sent to your registered WhatsApp number
         </p>
+        <p className="mt-2 text-center text-[11px] text-slate-300">v{__APP_VERSION__}</p>
       </div>
     </div>
   );

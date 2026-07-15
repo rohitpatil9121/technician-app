@@ -1,8 +1,13 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
+import { readFileSync } from "node:fs";
+
+// Expose the package version so the app can show a visible build stamp.
+const pkgVersion = JSON.parse(readFileSync(new URL("./package.json", import.meta.url))).version;
 
 export default defineConfig({
   plugins: [react()],
+  define: { __APP_VERSION__: JSON.stringify(pkgVersion) },
   build: {
     target: "es2020",
     cssMinify: true,
