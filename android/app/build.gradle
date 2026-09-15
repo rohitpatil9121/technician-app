@@ -7,8 +7,11 @@ android {
         applicationId "com.oasisglobe.technician"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 2
-        versionName "1.1.0"
+        // Keep in step with package.json. versionCode must ALWAYS increase —
+        // Android refuses to install a lower code over a higher one, and this
+        // drifted once already (gradle said 2.8.0/15 while releases were at 2.12.1/21).
+        versionCode 38
+        versionName "3.13.0"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
@@ -16,10 +19,45 @@ android {
             ignoreAssetsPattern '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
+    /* Permanent signing key.
+
+       Android identifies an app by its SIGNATURE, not its version — an APK
+       signed with a different key cannot upgrade an installed one, it can only
+       be installed after uninstalling. Relying on the auto-generated
+       ~/.android/debug.keystore caused exactly that: the file vanished, Gradle
+       silently made a new one, and every phone rejected the build.
+
+       So both debug and release now sign with a keystore kept OUTSIDE the repo
+       (in oasis-secrets, backed up). Path/password come from
+       android/keystore.properties, which is gitignored. If that file is absent
+       the build falls back to the debug key — fine for a local test build, but
+       such an APK will NOT upgrade technicians' phones. */
+    signingConfigs {
+        oasis {
+            def propsFile = rootProject.file("keystore.properties")
+            if (propsFile.exists()) {
+                def props = new Properties()
+                props.load(new FileInputStream(propsFile))
+                storeFile file(props['storeFile'])
+                storePassword props['storePassword']
+                keyAlias props['keyAlias']
+                keyPassword props['keyPassword']
+            }
+        }
+    }
+
     buildTypes {
+        debug {
+            if (rootProject.file("keystore.properties").exists()) {
+                signingConfig signingConfigs.oasis
+            }
+        }
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+            if (rootProject.file("keystore.properties").exists()) {
+                signingConfig signingConfigs.oasis
+            }
         }
     }
 }
