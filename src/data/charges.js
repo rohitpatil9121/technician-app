@@ -1,0 +1,26 @@
+// M3 redesign: the bill is CALL TYPE (data for the office) + a freeform
+// SERVICE CHARGE (any amount, or Free) — independent of each other.
+// `charge` ids still ride to the backend for CHARGE_LABELS / CHARGE_FREE compat.
+export const CALL_TYPES = [
+  { id: "service", icon: "wrench", tone: "blue", label: "Service", sub: "Normal paid service" },
+  { id: "warranty", icon: "shield", tone: "green", label: "Warranty / AMC", sub: "Under warranty or AMC" },
+  { id: "repeat", icon: "repeat", tone: "purple", label: "Repeat Call", sub: "Same problem in 7 days" },
+  { id: "installation", icon: "install", tone: "amber", label: "Installation", sub: "New machine fit" },
+];
+
+export const SVC_PRESETS = [0, 250, 350];
+// Fixed price for a new-machine fit (same figure on the portal and the public
+// price list). Picked automatically when the Installation call type is chosen.
+export const INSTALLATION_CHARGE = 350;
+export const SVC_STEP = 50;
+export const SVC_MAX = 1000;
+
+// Old builds and the dashboard still read `work.charge`; keep the old flat
+// list so finished jobs written by them render their bill labels.
+export const chargeTypes = [
+  { id: "service", label: "Service Charge (repair done)", amount: 250 },
+  { id: "visit", label: "Visit Charge (no repair)", amount: 250 },
+  { id: "warranty", label: "No Charge (Under Warranty)", amount: 0 },
+  { id: "repeat", label: "Repeat Call (within 7 days)", amount: 0 },
+  { id: "installation", label: "Installation", amount: 350 },
+];
