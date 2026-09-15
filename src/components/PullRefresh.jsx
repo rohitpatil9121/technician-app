@@ -20,7 +20,7 @@ function RefreshIndicator({ pull, busy, ready }) {
     >
       <div
         className={cx(
-          "grid h-8 w-8 place-items-center rounded-full bg-white shadow-card ring-1 ring-slate-200/60",
+          "grid h-8 w-8 place-items-center rounded-full bg-surface shadow-card ring-1 ring-line/60",
           (ready || busy) && "ring-brand/25"
         )}
         style={{ transform: busy ? undefined : `scale(${0.85 + progress * 0.15})` }}
@@ -37,7 +37,7 @@ function RefreshIndicator({ pull, busy, ready }) {
             strokeWidth="2.5"
             strokeLinecap="round"
             strokeLinejoin="round"
-            className={cx("transition-colors", ready ? "text-brand" : "text-slate-400")}
+            className={cx("transition-colors", ready ? "text-brand-fg" : "text-subtle")}
             style={{ transform: `rotate(${ready ? 180 : progress * 140}deg)`, transition: "transform 0.15s ease" }}
           >
             <path d="M12 5v14M5 12l7-7 7 7" />
@@ -48,7 +48,7 @@ function RefreshIndicator({ pull, busy, ready }) {
         <span
           className={cx(
             "mt-1.5 pb-0.5 text-[11px] font-medium tracking-wide transition-colors",
-            busy || ready ? "text-brand" : "text-slate-400"
+            busy || ready ? "text-brand-fg" : "text-subtle"
           )}
         >
           {busy ? "Updating…" : ready ? "Release to refresh" : "Pull down"}

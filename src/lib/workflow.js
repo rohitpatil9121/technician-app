@@ -1,25 +1,39 @@
-// The simplified 3-step job lifecycle. Order matters — the stepper renders this
-// array. The older fine-grained statuses still exist (and map below) so jobs
-// mid-flow resume on the right step.
+// The 4-milestone job flow: Reach → Details → Bill → Payment.
+//
+// "Work" used to sit between Bill and Payment as a fifth milestone, but it only
+// ever said "do the repair, then press the button" — a screen technicians tapped
+// straight through, so the owner had it removed. The WORK_DONE write it carried
+// still happens: the Bill screen's "Collect Payment" records it on the way past,
+// which keeps work_done_at on the ticket and the customer's "work finished,
+// amount due" WhatsApp going out exactly as before.
+//
+// Older fine-grained statuses still map below so jobs written mid-flow by
+// previous builds resume correctly.
 export const STEPS = [
-  { key: "accept", label: "Accept" },
-  { key: "service", label: "Diagnose & Estimate" },
-  { key: "close", label: "Payment & Close" },
+  { key: "reach", label: "Reach", icon: "pin" },
+  { key: "details", label: "Details", icon: "drop" },
+  { key: "bill", label: "Bill", icon: "receipt" },
+  { key: "payment", label: "Payment", icon: "bag" },
 ];
 
-// Which step a status sits on (the step the technician acts on next).
+// Which milestone a status sits on (the one the technician acts on next).
 const STATUS_STEP = {
   NEW: 0,
-  ACCEPTED: 1,
-  ON_THE_WAY: 1,
+  ACCEPTED: 0,
+  ON_THE_WAY: 0,
   ARRIVED: 1,
-  DIAGNOSED: 1,
+  DIAGNOSED: 2,
+  // Legacy states from the removed WhatsApp-approval flow — land on Bill so the
+  // technician can re-send or start the work in person.
   ESTIMATE_SENT: 2,
-  VERIFIED: 2,
   REJECTED: 2,
-  WORK_DONE: 2,
-  PAID: 2,
-  CLOSED: 3,
+  // VERIFIED means the estimate went out and work started. With Work gone that
+  // is no longer a screen of its own, so — like WORK_DONE — it resumes on
+  // Payment. A job parked at VERIFIED by an older build lands there too.
+  VERIFIED: 3,
+  WORK_DONE: 3,
+  PAID: 3,
+  CLOSED: 4,
 };
 
 export const stepIndexForStatus = (status) =>
@@ -31,26 +45,11 @@ export const STATUS_META = {
   ACCEPTED: { label: "Accepted", tone: "brand" },
   ON_THE_WAY: { label: "On the way", tone: "warn" },
   ARRIVED: { label: "Arrived", tone: "brand" },
-  DIAGNOSED: { label: "Diagnosed", tone: "brand" },
-  ESTIMATE_SENT: { label: "Estimate sent", tone: "warn" },
-  VERIFIED: { label: "Verified", tone: "ok" },
+  DIAGNOSED: { label: "Making bill", tone: "brand" },
+  ESTIMATE_SENT: { label: "Bill made", tone: "warn" },
+  VERIFIED: { label: "Working", tone: "ok" },
   REJECTED: { label: "Rejected", tone: "danger" },
-  WORK_DONE: { label: "Work done", tone: "ok" },
+  WORK_DONE: { label: "Collect payment", tone: "warn" },
   PAID: { label: "Paid", tone: "ok" },
-  CLOSED: { label: "Closed", tone: "ok" },
-};
-
-// Left accent stripe on job cards.
-export const STATUS_STRIPE = {
-  NEW: "border-l-brand",
-  ACCEPTED: "border-l-brand",
-  ON_THE_WAY: "border-l-warn",
-  ARRIVED: "border-l-brand-light",
-  DIAGNOSED: "border-l-brand",
-  ESTIMATE_SENT: "border-l-warn",
-  VERIFIED: "border-l-ok",
-  REJECTED: "border-l-danger",
-  WORK_DONE: "border-l-ok",
-  PAID: "border-l-ok",
-  CLOSED: "border-l-ok",
+  CLOSED: { label: "Complete", tone: "ok" },
 };

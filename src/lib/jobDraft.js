@@ -6,6 +6,7 @@ const store = () => (typeof localStorage !== "undefined" ? localStorage : null);
 const draftKey = (id) => `og-job-draft:${id}`;
 const RESUME_PATH = "og-tech-resume-path";
 const PHOTO_BUSY = "og-tech-photo-busy";
+const PHOTO_KIND = "og-tech-photo-kind";
 
 /** Keep the hash route in sync so a WebView reload reopens the same job screen. */
 export function pinRoute(path) {
@@ -42,13 +43,21 @@ export function setResumePath(path) {
   if (path) store()?.setItem(RESUME_PATH, path);
 }
 
-export function markPhotoStart(path) {
+// `kind` says which tile opened the camera ("job" | "proof"), so a shot that
+// comes back after a WebView reload is offered to the right place.
+export function markPhotoStart(path, kind = "job") {
   store()?.setItem(PHOTO_BUSY, "1");
+  store()?.setItem(PHOTO_KIND, kind);
   pinRoute(path);
+}
+
+export function pendingPhotoKind() {
+  return store()?.getItem(PHOTO_KIND) === "proof" ? "proof" : "job";
 }
 
 export function clearPhotoMark() {
   store()?.removeItem(PHOTO_BUSY);
+  store()?.removeItem(PHOTO_KIND);
 }
 
 export function getBootResumePath() {
@@ -67,17 +76,16 @@ export function acknowledgeJobResume() {
   clearPhotoMark();
 }
 
-/** Re-apply saved draft fields after a WebView reload. */
+/** Re-apply saved draft fields after a WebView reload.
+    Generic on purpose: for each draft key, call the matching `set<Key>` if the
+    caller provided one, and silently skip the rest. Fields removed from the
+    form (TDS, problems, …) then just stop restoring instead of crashing the
+    screen when an old draft calls a setter that no longer exists. */
 export function applyJobDraft(draft, setters) {
   if (!draft) return;
-  if (draft.problems?.length) setters.setProblems(draft.problems);
-  if (draft.parts?.length) setters.setParts(draft.parts);
-  if (draft.charge) setters.setCharge(draft.charge);
-  if (draft.modelName != null && draft.modelName !== "") setters.setModelName(draft.modelName);
-  if (draft.otherText != null) setters.setOtherText(draft.otherText);
-  if (draft.tapIn != null && draft.tapIn !== "") setters.setTapIn(draft.tapIn);
-  if (draft.filterIn != null && draft.filterIn !== "") setters.setFilterIn(draft.filterIn);
-  if (draft.tapOut != null && draft.tapOut !== "") setters.setTapOut(draft.tapOut);
-  if (draft.filterOut != null && draft.filterOut !== "") setters.setFilterOut(draft.filterOut);
-  if (draft.cashAmt != null && draft.cashAmt !== "") setters.setCashAmt(draft.cashAmt);
+  for (const [k, v] of Object.entries(draft)) {
+    if (v == null || v === "" || (Array.isArray(v) && v.length === 0)) continue;
+    const fn = setters["set" + k[0].toUpperCase() + k.slice(1)];
+    if (typeof fn === "function") fn(v);
+  }
 }

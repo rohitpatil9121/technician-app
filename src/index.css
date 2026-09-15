@@ -2,6 +2,48 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ---------------------------- Semantic tokens ----------------------------
+   RGB triplets (not hex) so Tailwind's `rgb(var(--x) / <alpha-value>)` can
+   apply opacity — `bg-surface/60` etc. Light values first; the .dark block
+   below is the only place dark mode is defined.
+   Contrast verified against WCAG AA (4.5:1 body text, 3:1 large/UI). */
+/* Material 3 (Material You) tonal roles — matched to the client-approved
+   mockup (oasis-technician-redesign_6.html). Values are the mockup's, verbatim. */
+:root {
+  --surface: 255 255 255; /* card */
+  --sunken: 243 244 249; /* #F3F4F9 background */
+  --line: 231 224 236; /* #E7E0EC separator */
+  --text-strong: 29 27 32; /* #1D1B20 ink */
+  --text-body: 29 27 32; /* body copy is ink in M3 */
+  --text-muted: 73 69 79; /* #49454F secondary */
+  --text-subtle: 113 108 122; /* darkened from #79747E to hold 4.5:1 on bg */
+  --brand-fg: 8 66 160; /* #0842A0 primary-dark as text */
+  --ok-fg: 11 83 35; /* #0B5323 */
+  --warn-fg: 138 75 0; /* #8A4B00 */
+  --danger-fg: 140 29 24; /* #8C1D18 */
+}
+
+/* The old .dark block is gone: dark mode was removed at the owner's request and
+   the M3 palette was only designed for light. forceLightTheme() still strips any
+   stale .dark class at boot. */
+
+/* Material 3 touch ripple (see lib/ripple.js). Pure transform+opacity. */
+.ripple {
+  position: absolute;
+  border-radius: 50%;
+  transform: scale(0);
+  background: currentColor;
+  opacity: 0.22;
+  pointer-events: none;
+  animation: mrip 0.5s linear;
+}
+@keyframes mrip {
+  to { transform: scale(2.6); opacity: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ripple { display: none; }
+}
+
 html,
 body,
 #root {
@@ -9,8 +51,22 @@ body,
 }
 
 body {
-  @apply bg-slate-100 text-slate-800 antialiased;
+  @apply bg-sunken font-sans text-body antialiased;
   overscroll-behavior-y: none;
+}
+
+/* Tabular figures for money and counters. Without this, RupeeCount's
+   frame-by-frame digits change width and the amount visibly jitters. */
+.tnum {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1;
+}
+
+/* Buttons had no focus ring — only inputs did. Keyboard and switch-access
+   users had no visible focus anywhere in the app. */
+:where(button, a, [role="button"], input, select, textarea):focus-visible {
+  outline: 2px solid theme("colors.brand.DEFAULT");
+  outline-offset: 2px;
 }
 
 /* Notch / gesture-bar safe areas (Capacitor / iOS / Android). */
@@ -52,8 +108,14 @@ body {
   100% { background-position: 200% 0; }
 }
 .skeleton {
-  @apply rounded-lg bg-slate-200;
-  background-image: linear-gradient(90deg, rgb(226 232 240) 0%, rgb(241 245 249) 50%, rgb(226 232 240) 100%);
+  @apply rounded-lg;
+  background-color: rgb(var(--line));
+  background-image: linear-gradient(
+    90deg,
+    rgb(var(--line)) 0%,
+    rgb(var(--surface)) 50%,
+    rgb(var(--line)) 100%
+  );
   background-size: 200% 100%;
   animation: shimmer 1.4s ease-in-out infinite;
 }
@@ -64,4 +126,83 @@ body {
 }
 .animate-scale-in {
   animation: scaleIn 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+/* Same pop, for a box centred with left:50%/top:X + a -50%/-50% translate.
+   An animation's `transform` REPLACES the element's own, so the centring
+   translate has to be repeated in every keyframe — leave it out and the box
+   animates in half its width to the right (partly off-screen on a phone) and
+   snaps to centre the moment the animation ends. */
+@keyframes scaleInCentered {
+  from { opacity: 0; transform: translate(-50%, -50%) scale(0.85); }
+  to { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+}
+.animate-scale-in-centered {
+  animation: scaleInCentered 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+/* Step content sliding in when the job advances (Accept -> Diagnose -> Payment).
+   Direction carries the meaning: forward slides in from the right, back slides
+   in from the left, so a back press never reads as another step forward. */
+@keyframes stepIn {
+  from { opacity: 0; transform: translateX(14px); }
+  to { opacity: 1; transform: none; }
+}
+.animate-step {
+  animation: stepIn 0.28s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+@keyframes stepInBack {
+  from { opacity: 0; transform: translateX(-14px); }
+  to { opacity: 1; transform: none; }
+}
+.animate-step-back {
+  animation: stepInBack 0.28s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* List items rising in — used with a per-item animation-delay for a staggered load. */
+@keyframes riseIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: none; }
+}
+.animate-rise {
+  animation: riseIn 0.4s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* Inline panel unfolding under its trigger — the charge-type picker. Scales from
+   the top edge so it reads as opening out of the button, not appearing over it. */
+@keyframes dropOpen {
+  from { opacity: 0; transform: scaleY(0.92) translateY(-4px); }
+  to { opacity: 1; transform: none; }
+}
+.animate-drop {
+  animation: dropOpen 0.16s cubic-bezier(0.22, 1, 0.36, 1);
+  transform-origin: top center;
+}
+
+/* Bottom-sheet modal: backdrop fade + sheet sliding up from the bottom edge. */
+@keyframes backdropIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+.animate-backdrop {
+  animation: backdropIn 0.25s ease-out;
+}
+@keyframes sheetUp {
+  from { transform: translateY(100%); }
+  to { transform: none; }
+}
+.animate-sheet {
+  animation: sheetUp 0.34s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* Accessibility: honour the OS "reduce motion" setting — keep it smooth, not jarring. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
 }

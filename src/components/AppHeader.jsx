@@ -1,115 +1,93 @@
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useJobs } from "../store/JobsContext.jsx";
-import { technician } from "../data/mock.js";
-import { todayLabel } from "../lib/format.js";
-import { Icon, cx } from "./ui.jsx";
+import { Icon, IconChip, MDialog, MDialogBtn, MSheet } from "./ui.jsx";
 
-// Build the technician's notification list from their jobs — newest concerns
-// first. No backend/push needed: it's derived from the loaded jobs.
+/* Notifications are derived from the loaded jobs — no backend endpoint. */
 function useNotifications(jobs) {
   return useMemo(() => {
     const items = [];
     for (const j of jobs || []) {
       if (j.status === "NEW")
-        items.push({ id: j.id, icon: "alert", tone: "brand", title: "New job assigned", sub: `${j.name} • ${j.area}` });
-      else if (j.status === "ESTIMATE_SENT")
-        items.push({ id: j.id, icon: "clock", tone: "warn", title: "Waiting for customer approval", sub: `${j.name} • estimate sent` });
+        items.push({ id: j.id, icon: "pin", tone: "blue", title: "New job assigned", sub: `${j.name} · ${j.area}` });
       else if (j.status !== "CLOSED")
-        items.push({ id: j.id, icon: "truck", tone: "muted", title: "Job in progress", sub: `${j.name} • ${j.area}` });
+        items.push({ id: j.id, icon: "receipt", tone: "amber", title: "Job in progress", sub: `${j.name} · ${j.area}` });
     }
-    // New + approval-pending are the ones that truly need attention.
-    const unread = items.filter((i) => i.tone !== "muted").length;
+    const unread = items.filter((i) => i.tone === "blue").length;
     return { items, unread };
   }, [jobs]);
 }
 
-const TONE_BG = {
-  brand: "bg-brand-50 text-brand-dark",
-  warn: "bg-warn-light text-warn",
-  muted: "bg-slate-100 text-slate-500",
-};
+const initials = (name) =>
+  (name || "T").split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]?.toUpperCase()).join("") || "T";
 
-// Top bar shown on Home / Reviews (the tabbed screens).
-export default function AppHeader({ title }) {
-  const { online, setOnline, user, reviews, live, logout, jobs } = useJobs();
+/* Material 3 app header (mockup .apphead): Namaste + name,
+   notifications, avatar → logout dialog. */
+export default function AppHeader() {
+  const { user, logout, jobs } = useJobs();
   const nav = useNavigate();
-  const [bellOpen, setBellOpen] = useState(false);
+  const [sheet, setSheet] = useState(null); // notif | logout
   const { items, unread } = useNotifications(jobs);
-  const name = user?.full_name || technician.name;
-  const rating = live ? reviews?.average ?? "—" : technician.rating;
+  const name = user?.full_name || "Technician";
 
   return (
-    <header className="safe-top sticky top-0 z-10 bg-slate-100/95 px-4 pb-2 pt-3 backdrop-blur">
-      <div className="flex items-center justify-between">
-        <div>
-          <div className="text-xs text-slate-400">{todayLabel()}</div>
-          <div className="flex items-center gap-1.5 text-[15px] font-bold text-slate-800">
-            {name}
-            <span className="flex items-center gap-0.5 text-amber-500">
-              <Icon.star width={14} height={14} />
-              <span className="text-xs font-bold">{rating}</span>
-            </span>
-          </div>
+    <>
+      <div className="flex items-center justify-between pb-1.5 pt-1">
+        <div className="min-w-0">
+          <div className="text-[13px] font-semibold tracking-wide text-subtle">Namaste</div>
+          <div className="truncate text-[26px] font-extrabold tracking-tight text-strong">{name}</div>
         </div>
-        <div className="flex items-center gap-3">
-          <Icon.wifi width={18} height={18} className={online ? "text-ok" : "text-slate-300"} />
-          <button
-            onClick={() => setOnline((v) => !v)}
-            aria-label="Toggle availability"
-            className={cx(
-              "relative h-6 w-11 rounded-full transition",
-              online ? "bg-ok" : "bg-slate-300"
+        <div className="flex shrink-0 items-center gap-2">
+          <button type="button" aria-label={`Notifications${unread ? `, ${unread} new` : ""}`}
+            onClick={() => setSheet("notif")}
+            className="relative grid h-11 w-11 place-items-center rounded-full bg-tonal text-muted">
+            <Icon.bell width={19} height={19} />
+            {unread > 0 && (
+              <span className="absolute -right-0.5 -top-0.5 grid h-[17px] min-w-[17px] place-items-center rounded-full border-2 border-sunken bg-danger px-1 text-[10px] font-extrabold text-white">
+                {unread}
+              </span>
             )}
-          >
-            <span className={cx("absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition", online ? "left-[22px]" : "left-0.5")} />
           </button>
-          <button onClick={() => setBellOpen((v) => !v)} className="relative text-slate-600" aria-label="Notifications">
-            <Icon.bell width={22} height={22} />
-            {unread > 0 && <span className="absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full bg-danger" />}
-          </button>
-          <button
-            onClick={() => { if (window.confirm("Log out of the app?")) logout(); }}
-            aria-label="Log out"
-            className="text-slate-500 hover:text-danger"
-          >
-            <Icon.logout width={20} height={20} />
+          <button type="button" aria-label="Account"
+            onClick={() => setSheet("logout")}
+            className="grid h-11 w-11 place-items-center rounded-full bg-gradient-to-br from-brand-light to-brand-dark text-[16px] font-extrabold text-white shadow-[0_3px_8px_rgba(11,87,208,.25)]">
+            {initials(name)}
           </button>
         </div>
       </div>
-      {title && <h1 className="mt-2 text-2xl font-extrabold text-slate-800">{title}</h1>}
 
-      {/* Notifications dropdown */}
-      {bellOpen && (
-        <>
-          <div className="fixed inset-0 z-20" onClick={() => setBellOpen(false)} />
-          <div className="absolute right-4 top-14 z-30 max-h-[70vh] w-72 overflow-y-auto rounded-2xl border border-slate-200 bg-white p-2 shadow-pop">
-            <div className="px-2 py-1.5 text-sm font-bold text-slate-800">Notifications</div>
-            {items.length === 0 ? (
-              <div className="px-2 py-6 text-center text-sm text-slate-400">You're all caught up 🎉</div>
-            ) : (
-              items.map((n, i) => {
-                const I = Icon[n.icon];
-                return (
-                  <button
-                    key={n.id + i}
-                    onClick={() => { setBellOpen(false); nav(`/job/${n.id}`); }}
-                    className="flex w-full items-center gap-2.5 rounded-xl px-2 py-2 text-left hover:bg-slate-50"
-                  >
-                    <span className={cx("grid h-8 w-8 shrink-0 place-items-center rounded-full", TONE_BG[n.tone])}>
-                      <I width={16} height={16} />
-                    </span>
-                    <span className="min-w-0 flex-1">
-                      <div className="text-sm font-semibold text-slate-700">{n.title}</div>
-                      <div className="truncate text-xs text-slate-400">{n.sub}</div>
-                    </span>
-                  </button>
-                );
-              })
-            )}
-          </div>
-        </>
+      {sheet === "notif" && (
+        <MSheet title="Notifications" onClose={() => setSheet(null)}>
+          {items.length === 0 && <div className="py-8 text-center text-sm text-subtle">You're all caught up</div>}
+          {items.map((n) => {
+            const NIc = Icon[n.icon] || Icon.bell;
+            return (
+              <button key={n.id} type="button"
+                onClick={() => { setSheet(null); nav(`/job/${n.id}`); }}
+                className="mb-2.5 flex min-h-[56px] w-full items-center gap-3 rounded-2xl bg-sunken p-3 text-left">
+                <IconChip tone={n.tone}><NIc width={18} height={18} /></IconChip>
+                <span className="min-w-0 flex-1">
+                  <span className="block text-[15px] font-semibold text-strong">{n.title}</span>
+                  <span className="block truncate text-[13px] text-subtle">{n.sub}</span>
+                </span>
+              </button>
+            );
+          })}
+          <div className="h-4" />
+        </MSheet>
       )}
-    </header>
+      {sheet === "logout" && (
+        <MDialog title="Log out?" onClose={() => setSheet(null)}
+          icon={<Icon.logout width={22} height={22} className="text-danger" />} iconClass="bg-danger-tint"
+          actions={
+            <>
+              <MDialogBtn onClick={() => setSheet(null)}>Cancel</MDialogBtn>
+              <MDialogBtn danger bold onClick={() => { setSheet(null); logout(); }}>Log Out</MDialogBtn>
+            </>
+          }>
+          You'll need your mobile number and WhatsApp code to log in again.
+        </MDialog>
+      )}
+    </>
   );
 }

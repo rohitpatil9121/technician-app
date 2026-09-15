@@ -51,9 +51,11 @@ export default function OtpInput({ length = 6, value = "", onChange, disabled })
           onPaste={onPaste}
           onFocus={(e) => e.target.select()}
           className={cx(
-            "h-12 w-10 rounded-xl border-2 bg-white text-center text-lg font-bold outline-none transition",
-            value[i] ? "border-brand text-brand-dark" : "border-slate-200 text-slate-800",
-            "focus:border-brand focus:ring-2 focus:ring-brand-50",
+            "h-[60px] w-[50px] rounded-xl text-center text-[26px] font-bold outline-none transition",
+            value[i]
+              ? "bg-brand-tint text-brand-dark shadow-[inset_0_0_0_2px_#0B57D0]"
+              : "bg-tonal text-strong",
+            "focus:shadow-[inset_0_0_0_2px_#0B57D0]",
             disabled && "opacity-50"
           )}
         />

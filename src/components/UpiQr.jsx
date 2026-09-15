@@ -19,11 +19,11 @@ export default function UpiQr({ amount }) {
   return (
     <div className="flex flex-col items-center">
       {!valid
-        ? <div className="grid h-56 w-56 place-items-center px-4 text-center text-sm text-danger">Invalid amount — cannot generate QR.</div>
+        ? <div className="grid h-56 w-56 place-items-center px-4 text-center text-sm text-danger-fg">Invalid amount — cannot generate QR.</div>
         : url
           ? <img src={url} alt="UPI QR" className="h-56 w-56" />
-          : <div className="grid h-56 w-56 place-items-center text-sm text-slate-400">Generating QR…</div>}
-      <div className="mt-1 text-xs text-slate-500">Scan with any UPI app · {UPI_ID}</div>
+          : <div className="grid h-56 w-56 place-items-center text-sm text-subtle">Generating QR…</div>}
+      <div className="mt-1 text-xs text-muted">Scan with any UPI app · {UPI_ID}</div>
     </div>
   );
 }

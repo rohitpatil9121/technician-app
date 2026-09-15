@@ -1,7 +1,12 @@
 import { createContext, useContext, useEffect, useMemo, useState, useCallback, useRef } from "react";
-import { jobsSeed, partsCatalog as mockParts, reviews as mockReviews } from "../data/mock.js";
 import { App } from "@capacitor/app";
-import { api, getToken, setToken, STATUS_TO_ACTION } from "../lib/api.js";
+import { api, getToken, setToken, setUnauthorizedHandler, STATUS_TO_ACTION } from "../lib/api.js";
+import { queuedStep, startSync, setJobSink, onOutboxChange } from "../lib/sync.js";
+import {
+  loadCachedJobs, cacheJobs, clearCachedJobs,
+  loadCachedParts, cacheParts, clearCachedParts,
+  loadCachedReviews, cacheReviews, clearCachedReviews,
+} from "../lib/jobCache.js";
 
 const JobsContext = createContext(null);
 const POLL_MS = 30000;
@@ -13,12 +18,21 @@ const jobsSig = (list) =>
 export function JobsProvider({ children }) {
   const [live, setLive] = useState(() => !!getToken());
   const [loggedIn, setLoggedIn] = useState(() => !!getToken());
-  const [jobs, setJobs] = useState(() => (getToken() ? [] : jobsSeed.map((j) => ({ ...j, work: {} }))));
-  const [parts, setParts] = useState(mockParts);
-  const [reviews, setReviews] = useState(mockReviews);
+  const [jobs, setJobs] = useState(() => loadCachedJobs());
+  const [parts, setParts] = useState(loadCachedParts);
+  const [reviews, setReviews] = useState(loadCachedReviews);
   const [user, setUser] = useState(null);
   const [online, setOnlineState] = useState(true);
   const [jobsLoading, setJobsLoading] = useState(false);
+  /* Why the last job load failed, or null.
+
+     It used to go to console.error and nowhere else. HomeV2 has always had an
+     error panel with a Try again button, but nothing ever filled it in, so a
+     technician whose phone had dropped off the network — or whose seven-day
+     session had quietly expired — was shown "No open jobs for today". Reading
+     that as "the office has given me nothing" is the obvious thing to do, and
+     it is wrong every time. */
+  const [jobsError, setJobsError] = useState(null);
   const hasJobsRef = useRef(false);
 
   const loadJobs = useCallback(async ({ background = false } = {}) => {
@@ -28,7 +42,14 @@ export function JobsProvider({ children }) {
       const { jobs: rows } = await api.jobs();
       setJobs((prev) => (jobsSig(prev) === jobsSig(rows) ? prev : rows));
       hasJobsRef.current = true;
-    } catch (e) { console.error("loadJobs:", e.message); }
+      setJobsError(null);
+    } catch (e) {
+      console.error("loadJobs:", e.message);
+      // Cached jobs stay on screen and keep working offline; the banner only
+      // says the list may be out of date. With nothing cached there is nothing
+      // to show but the error, which is the honest answer.
+      setJobsError(e.message || "Could not reach the server");
+    }
     finally {
       if (!background) setJobsLoading(false);
     }
@@ -39,6 +60,7 @@ export function JobsProvider({ children }) {
     try {
       const { reviews: next } = await api.reviews();
       if (next) {
+        cacheReviews(next);
         setReviews((prev) => {
           const a = JSON.stringify(prev);
           const b = JSON.stringify(next);
@@ -48,13 +70,26 @@ export function JobsProvider({ children }) {
     } catch (e) { console.error("loadReviews:", e.message); }
   }, []);
 
+  /* Who is signed in. Asked for once on boot and, if that one call failed, again
+     on the next poll — a single dropped request used to leave the header reading
+     "Namaste, Technician" for the whole session, because nothing ever asked a
+     second time. */
+  const userRef = useRef(null);
+  const ensureUser = useCallback(async () => {
+    if (userRef.current || !getToken()) return;
+    try {
+      const { user: u } = await api.me();
+      if (u) { userRef.current = u; setUser(u); }
+    } catch { /* the next poll tries again */ }
+  }, []);
+
   useEffect(() => {
     if (!getToken()) return;
     loadJobs();
     loadReviews();
-    api.me().then(({ user: u }) => u && setUser(u)).catch(() => {});
-    api.parts().then(({ parts: p }) => p?.length && setParts(p)).catch(() => {});
-  }, [loadJobs, loadReviews]);
+    ensureUser();
+    api.parts().then(({ parts: p }) => { if (p?.length) { setParts(p); cacheParts(p); } }).catch(() => {});
+  }, [loadJobs, loadReviews, ensureUser]);
 
   useEffect(() => {
     if (!loggedIn) return;
@@ -72,6 +107,7 @@ export function JobsProvider({ children }) {
 
     const timer = setInterval(() => {
       refreshJobs();
+      ensureUser();
       reviewTick += 1;
       if (reviewTick % 2 === 0) loadReviews();
     }, POLL_MS);
@@ -94,7 +130,7 @@ export function JobsProvider({ children }) {
       window.removeEventListener("focus", scheduleResumeRefresh);
       appSub?.remove?.();
     };
-  }, [loggedIn, loadJobs, loadReviews]);
+  }, [loggedIn, loadJobs, loadReviews, ensureUser]);
 
   const startLive = useCallback(async (token, u) => {
     setToken(token);
@@ -103,26 +139,42 @@ export function JobsProvider({ children }) {
     if (u) setUser(u);
     await loadJobs();
     await loadReviews();
-    api.parts().then(({ parts: p }) => p?.length && setParts(p)).catch(() => {});
+    api.parts().then(({ parts: p }) => { if (p?.length) { setParts(p); cacheParts(p); } }).catch(() => {});
   }, [loadJobs, loadReviews]);
-
-  const startDemo = useCallback(() => {
-    setToken(null);
-    setLive(false);
-    setJobs(jobsSeed.map((j) => ({ ...j, work: {} })));
-    setParts(mockParts);
-    setReviews(mockReviews);
-    setLoggedIn(true);
-    hasJobsRef.current = true;
-  }, []);
 
   const logout = useCallback(() => {
     setToken(null);
     setLive(false);
     setLoggedIn(false);
     setUser(null);
+    userRef.current = null; // next sign-in must fetch the new technician
     setJobs([]);
+    // Wipe the offline copy too — the next technician to log in on this phone
+    // must not see the previous one's jobs.
+    clearCachedJobs();
+    clearCachedParts();
+    clearCachedReviews();
     hasJobsRef.current = false;
+  }, []);
+
+  // An expired or rejected token ends the session here, the same as tapping
+  // Log out — the app stops pretending to be signed in and shows the login screen.
+  useEffect(() => {
+    setUnauthorizedHandler(() => logout());
+    return () => setUnauthorizedHandler(null);
+  }, [logout]);
+
+  // Keep the last server list on the device: with no signal the technician must
+  // still see today's jobs instead of an empty screen.
+  useEffect(() => { cacheJobs(jobs); }, [jobs]);
+
+  // Replay anything written while offline, and fold the synced job back in.
+  const [pendingSync, setPendingSync] = useState(0);
+  useEffect(() => {
+    setJobSink((job) => setJobs((prev) => prev.map((j) => (j.id === job.id ? job : j))));
+    const off = onOutboxChange(setPendingSync);
+    startSync();
+    return off;
   }, []);
 
   const getJob = useCallback((id) => jobs.find((j) => j.id === id), [jobs]);
@@ -132,18 +184,30 @@ export function JobsProvider({ children }) {
     []
   );
 
+  // "New Call": drop a freshly created job into the list without a full reload.
+  const addJob = useCallback(
+    (job) => setJobs((prev) => (prev.some((j) => j.id === job.id) ? prev : [job, ...prev])),
+    []
+  );
+
   const updateJob = useCallback((id, patch) => {
+    // `action` overrides the status→action mapping for steps where the backend
+    // lands on a different status than the one we show optimistically (sending
+    // the estimate puts the job straight into VERIFIED / work started).
+    const { action, ...jobPatch } = patch;
     setJobs((prev) =>
       prev.map((j) =>
-        j.id === id ? { ...j, ...patch, work: { ...j.work, ...(patch.work || {}) } } : j
+        j.id === id ? { ...j, ...jobPatch, work: { ...j.work, ...(jobPatch.work || {}) } } : j
       )
     );
-    if (live && patch.status && STATUS_TO_ACTION[patch.status]) {
-      api
-        .step(id, STATUS_TO_ACTION[patch.status], patch.work || {})
-        .then(({ job }) => setJobs((prev) => prev.map((j) => (j.id === id ? job : j))))
-        .catch((e) => { console.error("step:", e.message); loadJobs({ background: true }); });
-    }
+    const step = action || (patch.status && STATUS_TO_ACTION[patch.status]);
+    if (!live || !step) return Promise.resolve();
+    // Returned so callers can await the write landing. Tapping "Reached" fires
+    // this and the arrival-OTP request; letting them overlap raced two writes
+    // to the same job and the OTP lost.
+    return queuedStep(id, step, patch.work || {})
+      .then((res) => { if (res?.job) setJobs((prev) => prev.map((j) => (j.id === id ? res.job : j))); })
+      .catch((e) => { console.error("step:", e.message); loadJobs({ background: true }); });
   }, [live, loadJobs]);
 
   const setOnline = useCallback((v) => {
@@ -156,10 +220,10 @@ export function JobsProvider({ children }) {
 
   const value = useMemo(
     () => ({
-      jobs, parts, reviews, user, online, jobsLoading, setOnline, loggedIn, live,
-      startLive, startDemo, logout, updateJob, getJob, setJob, loadJobs, loadReviews,
+      jobs, parts, reviews, user, online, jobsLoading, jobsError, setOnline, loggedIn, live, pendingSync,
+      startLive, logout, updateJob, getJob, setJob, addJob, loadJobs, loadReviews,
     }),
-    [jobs, parts, reviews, user, online, jobsLoading, loggedIn, live, logout, loadJobs, loadReviews, setOnline, updateJob, getJob, setJob, startLive, startDemo]
+    [jobs, parts, reviews, user, online, jobsLoading, jobsError, loggedIn, live, pendingSync, logout, loadJobs, loadReviews, setOnline, updateJob, getJob, setJob, addJob, startLive]
   );
 
   return <JobsContext.Provider value={value}>{children}</JobsContext.Provider>;
