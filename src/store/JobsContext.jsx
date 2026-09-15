@@ -143,6 +143,9 @@ export function JobsProvider({ children }) {
     await loadJobs();
     await loadReviews();
     api.parts().then(({ parts: p }) => { if (p?.length) { setParts(p); cacheParts(p); } }).catch(() => {});
+    // Same as on app start: the first bill after a fresh login must already
+    // carry the office's charges, not the shipped defaults.
+    api.config().then(({ config: c }) => { if (c) { setConfig(c); cacheConfig(c); } }).catch(() => {});
   }, [loadJobs, loadReviews]);
 
   const logout = useCallback(() => {
