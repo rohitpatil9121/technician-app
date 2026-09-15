@@ -833,9 +833,9 @@ function JobDetailInner({ job }) {
               <button key={c.id} type="button" aria-pressed={on}
                 onClick={() => {
                   setCallType(c.id);
-                  // Installation has one fixed price; pre-fill it so the tech
-                  // does not bill a new fit at the repair rate by habit.
-                  if (c.id === "installation") setServiceCharge(bill.installationCharge);
+                  // Pre-fill only when the office has fixed an installation
+                  // price; normally it is 250 or 350 by lead and the tech picks.
+                  if (c.id === "installation" && bill.installationCharge != null) setServiceCharge(bill.installationCharge);
                 }}
                 className={cx(
                   "rounded-xl px-3 py-2.5 text-left transition active:scale-[0.98]",

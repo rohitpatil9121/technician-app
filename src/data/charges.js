@@ -12,9 +12,10 @@ export const CALL_TYPES = [
 // dashboard → Settings); these only apply before the first successful fetch.
 export const SVC_PRESETS = [0, 250, 350];
 export const SERVICE_CHARGE = 250;
-// Fixed price for a new-machine fit (same figure on the portal and the public
-// price list). Picked automatically when the Installation call type is chosen.
-export const INSTALLATION_CHARGE = 350;
+// Installation has no single price: ₹250 on an organic lead, ₹350 on a Kent
+// lead, and the technician picks. null = do not pre-fill; the office can set a
+// fixed figure on the dashboard if that ever changes.
+export const INSTALLATION_CHARGE = null;
 export const SVC_STEP = 50;
 export const SVC_MAX = 1000;
 
@@ -26,7 +27,7 @@ export function billConfig(config) {
   const presets = Array.isArray(c.service_presets) && c.service_presets.length ? c.service_presets : SVC_PRESETS;
   return {
     serviceCharge: num(c.service_charge, SERVICE_CHARGE),
-    installationCharge: num(c.installation_charge, INSTALLATION_CHARGE),
+    installationCharge: c.installation_charge == null || c.installation_charge === "" ? INSTALLATION_CHARGE : num(c.installation_charge, INSTALLATION_CHARGE),
     presets,
     max: Math.max(num(c.service_max, SVC_MAX), ...presets),
     upiId: c.upi_id || "",
@@ -41,5 +42,5 @@ export const chargeTypes = [
   { id: "visit", label: "Visit Charge (no repair)", amount: 250 },
   { id: "warranty", label: "No Charge (Under Warranty)", amount: 0 },
   { id: "repeat", label: "Repeat Call (within 7 days)", amount: 0 },
-  { id: "installation", label: "Installation", amount: 350 },
+  { id: "installation", label: "Installation", amount: 250 },
 ];
