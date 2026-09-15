@@ -247,6 +247,13 @@ export function installMockApi() {
       return ok({ job });
     }
     if (path === "/api/tech/parts") return ok({ parts: PARTS });
+    // What the dashboard's Settings page would hand a real technician. The
+    // odd preset (₹500) is deliberate: proof on screen that the bill buttons
+    // come from here, not from the shipped defaults in data/charges.js.
+    if (path === "/api/tech/config") return ok({ config: {
+      service_charge: 250, installation_charge: null, service_presets: [0, 250, 350, 500],
+      service_max: 1500, upi_id: "oasisglobe@upi", upi_payee: "Oasis Globe Services",
+    } });
     if (path === "/api/tech/reviews") return ok({ reviews: REVIEWS });
     if (path === "/api/tech/earnings") return ok(earnings());
     if (path === "/api/tech/availability" || path === "/api/tech/push-token" || path === "/api/tech/location") return ok({ ok: true });
