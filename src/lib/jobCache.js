@@ -54,6 +54,29 @@ export function cacheParts(parts) {
   }
 }
 
+const CONFIG_KEY = "tech_config_v1";
+
+/* Same reasoning as the parts cache: the bill screen must work in a kitchen
+   with no signal, and the charges it offers should be the ones the office set
+   last time we were online — not whatever the build shipped with. */
+export function loadCachedConfig() {
+  try {
+    const c = JSON.parse(localStorage.getItem(CONFIG_KEY) || "null");
+    return c && typeof c === "object" ? c : null;
+  } catch {
+    return null;
+  }
+}
+
+export function cacheConfig(config) {
+  try { if (config && typeof config === "object") localStorage.setItem(CONFIG_KEY, JSON.stringify(config)); }
+  catch { /* quota / private mode */ }
+}
+
+export function clearCachedConfig() {
+  try { localStorage.removeItem(CONFIG_KEY); } catch { /* ignore */ }
+}
+
 export function clearCachedParts() {
   try { localStorage.removeItem(PARTS_KEY); } catch { /* ignore */ }
 }

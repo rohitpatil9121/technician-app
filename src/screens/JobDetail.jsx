@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useJobs } from "../store/JobsContext.jsx";
-import { CALL_TYPES, SVC_PRESETS, SVC_STEP, SVC_MAX, INSTALLATION_CHARGE, chargeTypes } from "../data/charges.js";
+import { CALL_TYPES, SVC_STEP, billConfig, chargeTypes } from "../data/charges.js";
 import { rupee, rupeeAmt } from "../lib/format.js";
 import { mediaUrl } from "../lib/api.js";
 import { callPhone, openMaps, openWhatsApp } from "../lib/contact.js";
@@ -153,7 +153,8 @@ export default function JobDetail() {
 
 function JobDetailInner({ job }) {
   const nav = useNavigate();
-  const { updateJob, parts: partsCatalog } = useJobs();
+  const { updateJob, parts: partsCatalog, config } = useJobs();
+  const bill = billConfig(config);
   const w = job.work || {};
   const draft = loadJobDraft(job.id);
   const st = job.status;
@@ -161,7 +162,7 @@ function JobDetailInner({ job }) {
   /* ------- editable state (seeded from saved work + draft after reload) ------- */
   const [callType, setCallType] = useState(draft?.callType ?? w.call_type ?? (job.visitCharge === 0 ? "warranty" : "service"));
   const [serviceCharge, setServiceCharge] = useState(
-    Number(draft?.serviceCharge ?? w.service_charge ?? (job.visitCharge === 0 ? 0 : 250))
+    Number(draft?.serviceCharge ?? w.service_charge ?? (job.visitCharge === 0 ? 0 : bill.serviceCharge))
   );
   const [parts, setParts] = useState(draft?.parts ?? w.parts ?? []);
   const [modelName, setModelName] = useState(
@@ -488,7 +489,7 @@ function JobDetailInner({ job }) {
      saved work, exactly as a fresh mount would. */
   const discardRevisit = () => {
     setCallType(w.call_type ?? (job.visitCharge === 0 ? "warranty" : "service"));
-    setServiceCharge(Number(w.service_charge ?? (job.visitCharge === 0 ? 0 : 250)));
+    setServiceCharge(Number(w.service_charge ?? (job.visitCharge === 0 ? 0 : bill.serviceCharge)));
     setParts(w.parts ?? []);
     setModelName(w.model_name ?? (job.model && job.model !== "—" ? job.model : ""));
     stepForward();
@@ -834,7 +835,7 @@ function JobDetailInner({ job }) {
                   setCallType(c.id);
                   // Installation has one fixed price; pre-fill it so the tech
                   // does not bill a new fit at the repair rate by habit.
-                  if (c.id === "installation") setServiceCharge(INSTALLATION_CHARGE);
+                  if (c.id === "installation") setServiceCharge(bill.installationCharge);
                 }}
                 className={cx(
                   "rounded-xl px-3 py-2.5 text-left transition active:scale-[0.98]",
@@ -860,13 +861,13 @@ function JobDetailInner({ job }) {
               <div className="text-[16px] font-bold text-strong">Amount to collect</div>
               <div className="mt-0.5 text-[12.5px] text-muted">Tap the number to type any amount</div>
             </div>
-            <PlusMinus value={serviceCharge} min={0} max={SVC_MAX} step={SVC_STEP} wide
+            <PlusMinus value={serviceCharge} min={0} max={bill.max} step={SVC_STEP} wide
               format={(v) => (v === 0 ? "Free" : rupeeAmt(v))}
-              onDelta={(d) => setServiceCharge((v) => Math.max(0, Math.min(SVC_MAX, v + d)))}
+              onDelta={(d) => setServiceCharge((v) => Math.max(0, Math.min(bill.max, v + d)))}
               onInput={setServiceCharge} />
           </div>
           <div className="mt-3 flex gap-2">
-            {SVC_PRESETS.map((v) => {
+            {bill.presets.map((v) => {
               const on = serviceCharge === v;
               return (
                 <button key={v} type="button" onClick={() => setServiceCharge(v)} aria-pressed={on}
@@ -1041,7 +1042,7 @@ function JobDetailInner({ job }) {
           <Card className="mt-2 text-center">
             <div className="text-[13px] font-semibold uppercase tracking-wide text-muted">Scan to pay</div>
             <div className="tnum mb-3 mt-0.5 text-[32px] font-extrabold tracking-tight text-brand">{rupeeAmt(billTotal)}</div>
-            <div className="mx-auto grid w-fit place-items-center rounded-2xl bg-white p-3 shadow-card"><UpiQr amount={billTotal} /></div>
+            <div className="mx-auto grid w-fit place-items-center rounded-2xl bg-white p-3 shadow-card"><UpiQr amount={billTotal} upiId={bill.upiId} payee={bill.upiPayee} /></div>
             <div className="mt-2.5 text-[13px] text-muted">Customer scans with any UPI app</div>
           </Card>
           <Card className="mt-3">
@@ -1288,7 +1289,7 @@ function JobDetailInner({ job }) {
             </PrimaryButton>
           }>
           <Card className="text-center">
-            <div className="mx-auto grid w-fit place-items-center rounded-2xl bg-white p-3 shadow-card"><UpiQr amount={upiRemainder} /></div>
+            <div className="mx-auto grid w-fit place-items-center rounded-2xl bg-white p-3 shadow-card"><UpiQr amount={upiRemainder} upiId={bill.upiId} payee={bill.upiPayee} /></div>
             <div className="mt-2.5 text-[13px] text-muted">Customer scans with any UPI app</div>
           </Card>
           <Card className="mb-3 mt-3">

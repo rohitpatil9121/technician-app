@@ -5,6 +5,7 @@ import { queuedStep, startSync, setJobSink, onOutboxChange } from "../lib/sync.j
 import {
   loadCachedJobs, cacheJobs, clearCachedJobs,
   loadCachedParts, cacheParts, clearCachedParts,
+  loadCachedConfig, cacheConfig, clearCachedConfig,
   loadCachedReviews, cacheReviews, clearCachedReviews,
 } from "../lib/jobCache.js";
 
@@ -20,6 +21,7 @@ export function JobsProvider({ children }) {
   const [loggedIn, setLoggedIn] = useState(() => !!getToken());
   const [jobs, setJobs] = useState(() => loadCachedJobs());
   const [parts, setParts] = useState(loadCachedParts);
+  const [config, setConfig] = useState(loadCachedConfig);
   const [reviews, setReviews] = useState(loadCachedReviews);
   const [user, setUser] = useState(null);
   const [online, setOnlineState] = useState(true);
@@ -89,6 +91,7 @@ export function JobsProvider({ children }) {
     loadReviews();
     ensureUser();
     api.parts().then(({ parts: p }) => { if (p?.length) { setParts(p); cacheParts(p); } }).catch(() => {});
+    api.config().then(({ config: c }) => { if (c) { setConfig(c); cacheConfig(c); } }).catch(() => {});
   }, [loadJobs, loadReviews, ensureUser]);
 
   useEffect(() => {
@@ -153,6 +156,7 @@ export function JobsProvider({ children }) {
     // must not see the previous one's jobs.
     clearCachedJobs();
     clearCachedParts();
+    clearCachedConfig();
     clearCachedReviews();
     hasJobsRef.current = false;
   }, []);
@@ -220,10 +224,10 @@ export function JobsProvider({ children }) {
 
   const value = useMemo(
     () => ({
-      jobs, parts, reviews, user, online, jobsLoading, jobsError, setOnline, loggedIn, live, pendingSync,
+      jobs, parts, config, reviews, user, online, jobsLoading, jobsError, setOnline, loggedIn, live, pendingSync,
       startLive, logout, updateJob, getJob, setJob, addJob, loadJobs, loadReviews,
     }),
-    [jobs, parts, reviews, user, online, jobsLoading, jobsError, loggedIn, live, pendingSync, logout, loadJobs, loadReviews, setOnline, updateJob, getJob, setJob, addJob, startLive]
+    [jobs, parts, config, reviews, user, online, jobsLoading, jobsError, loggedIn, live, pendingSync, logout, loadJobs, loadReviews, setOnline, updateJob, getJob, setJob, addJob, startLive]
   );
 
   return <JobsContext.Provider value={value}>{children}</JobsContext.Provider>;

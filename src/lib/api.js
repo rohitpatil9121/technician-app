@@ -71,6 +71,9 @@ export const api = {
   // "New Call" — technician adds a walk-in customer; returns the created job.
   addCall: (body, client_id) => req("/tech/calls", { method: "POST", body: { ...body, client_id } }),
   parts: () => req("/tech/parts"),
+  // Charges, quick-pick amounts and the UPI id — set on the dashboard, read on
+  // every app start so nothing about money is baked into the APK.
+  config: () => req("/tech/config"),
   reviews: () => req("/tech/reviews"),
   // No earnings call. The app does not show a technician what he has earned —
   // the backend still computes payouts for the office (services/incentives.js),

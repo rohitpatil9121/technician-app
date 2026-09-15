@@ -10,8 +10,8 @@ android {
         // Keep in step with package.json. versionCode must ALWAYS increase —
         // Android refuses to install a lower code over a higher one, and this
         // drifted once already (gradle said 2.8.0/15 while releases were at 2.12.1/21).
-        versionCode 38
-        versionName "3.13.0"
+        versionCode 39
+        versionName "3.14.0"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.

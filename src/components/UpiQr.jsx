@@ -1,10 +1,15 @@
 import { useEffect, useState } from "react";
 import QRCode from "qrcode";
 
-const UPI_ID = import.meta.env.VITE_UPI_ID || "BHARATPE2U0G0A0D8G59789@unitype";
-const PAYEE = import.meta.env.VITE_UPI_PAYEE || "Oasis Globe";
+// Build-time fallbacks. The live id comes from the dashboard (Settings → UPI
+// ID) via /api/tech/config, so changing the bank account no longer means
+// rebuilding and redistributing the APK.
+const FALLBACK_UPI_ID = import.meta.env.VITE_UPI_ID || "BHARATPE2U0G0A0D8G59789@unitype";
+const FALLBACK_PAYEE = import.meta.env.VITE_UPI_PAYEE || "Oasis Globe";
 
-export default function UpiQr({ amount }) {
+export default function UpiQr({ amount, upiId, payee }) {
+  const UPI_ID = upiId || FALLBACK_UPI_ID;
+  const PAYEE = payee || FALLBACK_PAYEE;
   const [url, setUrl] = useState("");
   // UPI spec wants the amount as a fixed 2-decimal number; a NaN/blank amount
   // produces a QR most UPI apps reject with an error, so guard it.
@@ -14,7 +19,7 @@ export default function UpiQr({ amount }) {
     if (!valid) { setUrl(""); return; }
     const intent = `upi://pay?pa=${encodeURIComponent(UPI_ID)}&pn=${encodeURIComponent(PAYEE)}&am=${amt.toFixed(2)}&cu=INR`;
     QRCode.toDataURL(intent, { width: 240, margin: 1 }).then(setUrl).catch(() => {});
-  }, [amt, valid]);
+  }, [amt, valid, UPI_ID, PAYEE]);
 
   return (
     <div className="flex flex-col items-center">
