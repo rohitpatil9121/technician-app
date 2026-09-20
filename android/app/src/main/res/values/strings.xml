@@ -4,4 +4,11 @@
     <string name="title_activity_main">Oasis Technician</string>
     <string name="package_name">com.oasisglobe.technician</string>
     <string name="custom_url_scheme">com.oasisglobe.technician</string>
+
+    <!-- The name of the notification channel the location service posts under.
+         The technician sees this when he long-presses the notification, and it
+         is what he would have to find to silence it. The plugin's default reads
+         "Background Tracking", which sounds like something being done TO him;
+         this says who is asking and why. -->
+    <string name="capacitor_background_geolocation_notification_channel_name">Location while on duty</string>
 </resources>

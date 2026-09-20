@@ -652,7 +652,7 @@ function JobDetailInner({ job }) {
               <div className="flex items-center justify-between py-1 text-[15px] text-muted">
                 <span>Customer rating</span>
                 <span className="text-sm font-bold text-strong">
-                  {job.rating >= 5 ? "Best" : job.rating >= 3 ? "Good" : "Poor"}
+                  {job.rating >= 5 ? "Very Good" : job.rating >= 3 ? "Average" : "Bad"}
                 </span>
               </div>
             ) : (

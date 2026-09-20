@@ -3,13 +3,13 @@ import AppHeader from "../components/AppHeader.jsx";
 import { useJobs } from "../store/JobsContext.jsx";
 import { Icon, Card, cx } from "../components/ui.jsx";
 
-// Ratings are stored numerically (5 = Best, 4 = Good, 1 = Poor; legacy 1–5
-// scores map to the nearest level) but customers only ever see the three words.
-const levelOf = (n) => (n >= 5 ? "Best" : n >= 3 ? "Good" : "Poor");
+// Ratings are stored numerically (5 = Very Good, 4 = Average, 1 = Bad; legacy
+// 1–5 scores map to the nearest level) but customers only ever see the three words.
+const levelOf = (n) => (n >= 5 ? "Very Good" : n >= 3 ? "Average" : "Bad");
 const LEVEL_STYLE = {
-  Best: "bg-brand-tint text-brand-dark",
-  Good: "bg-tonal text-muted",
-  Poor: "bg-danger-tint text-danger",
+  "Very Good": "bg-brand-tint text-brand-dark",
+  Average: "bg-tonal text-muted",
+  Bad: "bg-danger-tint text-danger",
 };
 
 const LevelBadge = ({ n, className = "" }) => {
@@ -50,9 +50,9 @@ export default function Reviews() {
 
   const hasRatings = ((r?.jobsRated) ?? 0) > 0;
   // Group the numeric distribution into the three customer-facing levels.
-  const counts = { Best: 0, Good: 0, Poor: 0 };
+  const counts = { "Very Good": 0, Average: 0, Bad: 0 };
   for (const { stars, count } of r?.distribution || []) counts[levelOf(Number(stars))] += count;
-  const positivePct = hasRatings ? Math.round(((counts.Best + counts.Good) / r.jobsRated) * 100) : 0;
+  const positivePct = hasRatings ? Math.round(((counts["Very Good"] + counts.Average) / r.jobsRated) * 100) : 0;
 
   return (
     <>
@@ -69,7 +69,7 @@ export default function Reviews() {
         <div className="mt-4 flex gap-2">
           {[
             [r?.jobsRated ?? 0, "Ratings"],
-            [counts.Best, "Best"],
+            [counts["Very Good"], "Very Good"],
             [hasRatings && r?.thisWeek ? r.thisWeek : "—", "This week"],
           ].map(([v, l]) => (
             <div key={l} className="flex-1 rounded-xl bg-tonal px-2 py-2.5 text-center">
@@ -84,9 +84,9 @@ export default function Reviews() {
         <>
           <SecH>Ratings</SecH>
           <Card>
-            {["Best", "Good", "Poor"].map((word) => (
+            {["Very Good", "Average", "Bad"].map((word) => (
               <div key={word} className="mb-2.5 flex items-center gap-2.5 last:mb-0">
-                <span className="w-11 text-[13px] font-semibold text-muted">{word}</span>
+                <span className="w-[4.5rem] text-[13px] font-semibold text-muted">{word}</span>
                 <div className="h-2 flex-1 overflow-hidden rounded-full bg-tonal">
                   <i className="block h-full rounded-full bg-warn" style={{ width: `${r.jobsRated ? (counts[word] / r.jobsRated) * 100 : 0}%` }} />
                 </div>

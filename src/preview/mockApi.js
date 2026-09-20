@@ -170,7 +170,7 @@ const REVIEWS = {
   recent: [
     { name: "Meera Kulkarni", stars: 5, ticket: "OG-2850", at: "2026-07-21T07:55:00Z", label: "Excellent", text: "Fixed the leak quickly and cleaned up after." },
     { name: "Vikram Joshi", stars: 5, ticket: "OG-2849", at: "2026-07-21T04:20:00Z", label: "Excellent", text: "Very professional, explained the TDS readings." },
-    { name: "Anil Bhosale", stars: 4, ticket: "OG-2831", at: "2026-07-20T11:10:00Z", label: "Good", text: "Good work, arrived a little late." },
+    { name: "Anil Bhosale", stars: 4, ticket: "OG-2831", at: "2026-07-20T11:10:00Z", label: "Average", text: "Good work, arrived a little late." },
     { name: "Rekha Jadhav", stars: 3, ticket: "OG-2822", at: "2026-07-19T09:40:00Z", label: "Okay" },
   ],
 };
