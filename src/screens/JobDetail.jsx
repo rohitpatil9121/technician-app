@@ -205,6 +205,27 @@ function JobDetailInner({ job }) {
   const draftRef = useRef({});
   draftRef.current = { callType, serviceCharge, parts, modelName, cashPart };
 
+  /* A part with an office-fixed price is billed at exactly that price. Parts
+     come onto the bill from three places — the picker, a saved bill and a
+     restored draft — and the last two may predate the fixed price or carry a
+     rate typed before it was set. So the rule is applied to the bill itself,
+     whenever it or the catalog changes, rather than at each way in. The server
+     refuses any other price for these parts. */
+  useEffect(() => {
+    const fixedById = new Map(partsCatalog.filter((c) => c.fixed).map((c) => [c.id, Number(c.price || 0)]));
+    if (!fixedById.size) return;
+    setParts((prev) => {
+      let changed = false;
+      const next = prev.map((p) => {
+        const f = fixedById.get(p.id);
+        if (f == null || (p.fixed && Number(p.price) === f)) return p;
+        changed = true;
+        return { ...p, price: f, mrp: f, minPrice: f, fixed: true };
+      });
+      return changed ? next : prev;
+    });
+  }, [partsCatalog, parts]);
+
   useEffect(() => {
     pinRoute(`/job/${job.id}`);
     applyJobDraft(loadJobDraft(job.id), {
@@ -336,7 +357,7 @@ function JobDetailInner({ job }) {
   // Kept as typed (only nonsense is rejected) so priceLimit can flag it in red —
   // see the note on priceLimit for why this no longer clamps to MRP.
   const setPartPrice = (i, n) =>
-    setParts((prev) => prev.map((p, idx) => (idx === i ? { ...p, price: Math.max(0, Math.floor(Number(n) || 0)) } : p)));
+    setParts((prev) => prev.map((p, idx) => (idx === i && !p.fixed ? { ...p, price: Math.max(0, Math.floor(Number(n) || 0)) } : p)));
   /* `price` is the per-piece rate; the line the customer pays is price × qty.
      Both writers derive the new quantity inside the updater so two quick taps on
      + can't both read the same stale row and lose one of the increments. */
@@ -716,6 +737,15 @@ function JobDetailInner({ job }) {
           <FLabel icon={Icon.alert}>Issue</FLabel>
           <div className="text-[17px] font-semibold tracking-tight text-strong">{job.issue || "—"}</div>
         </Card>
+        {/* What the customer asked for beyond the issue ("bring 1 m silicon
+            pipe", "call before coming") and what the office typed while
+            assigning. Shown only when there is something to read. */}
+        {job.notes && (
+          <div className="mt-3 rounded-2xl bg-warn-tint p-4 shadow-card">
+            <FLabel icon={Icon.alert}>Notes</FLabel>
+            <div className="whitespace-pre-wrap text-[16px] font-semibold leading-relaxed text-strong">{job.notes}</div>
+          </div>
+        )}
         <Card className="mt-3">
           <FLabel icon={Icon.drop}>Purifier Details</FLabel>
           <Row l="Model" r={job.model || "—"} muted />
@@ -928,8 +958,18 @@ function JobDetailInner({ job }) {
                   a single part look like two separate amounts. The compact rate
                   field and stepper are what buy the space to keep it on one line. */}
               <div className="mt-2 flex items-center gap-1.5">
-                <PriceField compact invalid={!!overLimit} value={Number(p.price || 0)}
-                  onCommit={(n) => setPartPrice(i, n)} label={`Rate for ${p.name}`} />
+                {/* Office-fixed price: shown, not editable. Plain text rather
+                    than a disabled field, so it does not look like something
+                    that is merely broken. */}
+                {p.fixed ? (
+                  <span aria-label={`Rate for ${p.name}, fixed by office`}
+                    className="tnum w-[86px] min-w-[64px] rounded-full bg-sunken px-2 py-2 text-center text-[15px] font-bold text-muted">
+                    {rupeeAmt(p.price)}
+                  </span>
+                ) : (
+                  <PriceField compact invalid={!!overLimit} value={Number(p.price || 0)}
+                    onCommit={(n) => setPartPrice(i, n)} label={`Rate for ${p.name}`} />
+                )}
                 <span className="shrink-0 text-[15px] font-semibold text-subtle">×</span>
                 <PlusMinus compact value={partQty(p)} min={1} max={QTY_MAX} step={1}
                   onDelta={(d) => bumpPartQty(i, d)} onInput={(n) => setPartQtyAt(i, n)} />
@@ -941,6 +981,9 @@ function JobDetailInner({ job }) {
                   {rupeeAmt(partLineTotal(p))}
                 </span>
               </div>
+              {p.fixed && (
+                <div className="mt-1.5 text-[12.5px] font-semibold text-subtle">Fixed price — set by office</div>
+              )}
               {/* The limit that was breached, named. "Above MRP" alone would leave
                   the technician guessing what the ceiling actually is. */}
               {overLimit && (
