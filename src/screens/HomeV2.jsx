@@ -1,72 +1,64 @@
-import { useMemo, useEffect } from "react";
+import { useMemo, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useJobs } from "../store/JobsContext.jsx";
 import AppHeader from "../components/AppHeader.jsx";
-import { Icon, IconChip, SkeletonJobCard, cx } from "../components/ui.jsx";
-import { callPhone, openMaps, openWhatsApp } from "../lib/contact.js";
+import { Icon, SkeletonJobCard, cx } from "../components/ui.jsx";
+import { callPhone } from "../lib/contact.js";
 
-/* Home, Material 3 redesign (client mockup): a progress ring for today, a
-   "Do first" amber hero, then plain job rows. The FAB adds a walk-in call.
+/* Home: every open call in ONE list, every row the same size (owner's rule).
+
+   Nothing sits above the list — no "Today's work" card, no enlarged first job.
+   The only thing that sets a call apart is colour: a call that needs doing
+   first is shaded red and carries a tag saying why —
+
+     Revisit              the job came back (the request was reopened)
+     More than 24 hours   he has had it for over a day
+
+   Those rows lead the list; the rest follow in the order the server gave.
    Finished jobs are not listed here — they have their own tab, My Work. */
 
 const CLOSED = (j) => j.status === "CLOSED";
+const DAY_MS = 24 * 3600 * 1000;
 
-/* Which IST day a job was finished on, from the closing stamp the backend keeps
-   in tech_work. Jobs closed before that stamp existed return null.
+const isRevisit = (j) => !!(j.revisit || j.work?.reopened_at);
 
-   This matters because "Today's work" was counting every job the technician had
-   ever closed: Chhagan Bhamre's phone read "166 done, 4 to go" with the ring
-   almost full, as though he had done 166 jobs since breakfast. It can only ever
-   climb, so the one number meant to show today's progress showed nothing at all. */
-const istToday = () => new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" });
-const closedIST = (j) => {
-  const at = j.work?.closed_at;
-  return at ? new Date(at).toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" }) : null;
-};
-/* SVG progress ring (mockup ringSVG). */
-function Ring({ done, total, size = 52, stroke = 7 }) {
-  const r = (size - stroke) / 2;
-  const c = 2 * Math.PI * r;
-  const off = total > 0 ? c * (1 - done / total) : c;
-  return (
-    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} role="img" aria-label={`${done} of ${total} jobs done`}>
-      <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="#EAEAEF" strokeWidth={stroke} />
-      <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="#146C2E" strokeWidth={stroke}
-        strokeLinecap="round" strokeDasharray={c} strokeDashoffset={off} transform={`rotate(-90 ${size / 2} ${size / 2})`} />
-      <text x="50%" y="50%" textAnchor="middle" dominantBaseline="central"
-        className="fill-strong" fontSize={size * 0.28} fontWeight="800">{done}/{total}</text>
-    </svg>
-  );
+/* Has he had this call for more than a day? `assignedAt` is when it became his.
+   A backend that does not send it yet still files the call under "pending" when
+   it was given on an earlier day, which is the nearest thing to the same fact. */
+function isOverdue(j, now) {
+  if (j.assignedAt) return now - new Date(j.assignedAt).getTime() > DAY_MS;
+  return j.bucket === "pending";
 }
 
-/* Section heading with a coloured dot (mockup .hsech). */
-const SecHead = ({ tone, label, count }) => (
-  <div className="mx-1 mb-2 mt-4 flex items-center gap-2">
-    <span className={cx("h-[9px] w-[9px] rounded-full", tone === "amber" ? "bg-warn" : "bg-brand")} aria-hidden="true" />
-    <span className={cx("text-[13px] font-extrabold uppercase tracking-wide", tone === "amber" ? "text-warn-fg" : "text-brand")}>{label}</span>
-    <span className="text-[12.5px] font-bold text-subtle">{count}</span>
-  </div>
-);
+/* Why a call is high priority, or null. Revisit wins when both are true. */
+function priorityOf(j, now) {
+  if (isRevisit(j)) return { rank: 0, label: "Revisit" };
+  if (isOverdue(j, now)) return { rank: 1, label: "More than 24 hours" };
+  return null;
+}
 
-/* Compact job row (mockup .jcard2) — left accent by bucket, call circle right. */
-function JobRow({ job, accent, self, onOpen }) {
+/* One call. Same size for every job; red shade + tag when it is high priority. */
+function JobRow({ job, priority, onOpen }) {
+  const self = job.work?.added_by_tech;
   return (
     <div
       role="button" tabIndex={0}
       onClick={() => onOpen(job)}
       onKeyDown={(e) => { if (e.key === "Enter") onOpen(job); }}
       className={cx(
-        "m3r mt-2.5 flex cursor-pointer items-center gap-3 rounded-2xl border-l-4 bg-surface py-3 pl-3 pr-3 shadow-card",
-        accent === "amber" ? "border-l-warn" : accent === "purple" ? "border-l-accent" : "border-l-brand"
+        "m3r mt-2.5 flex cursor-pointer items-center gap-3 rounded-2xl border-l-4 py-3 pl-3 pr-3 shadow-card",
+        priority ? "border-l-danger bg-danger-tint" : self ? "border-l-accent bg-surface" : "border-l-brand bg-surface"
       )}
     >
       <div className="min-w-0 flex-1">
-        <div className="flex items-center gap-2 text-[16.5px] font-bold tracking-tight text-strong">
-          <span className="truncate">{job.name}</span>
-          {accent === "amber" && (
-            <span className="shrink-0 rounded-full bg-warn-tint px-2 py-0.5 text-[11px] font-extrabold text-warn-fg">Pending</span>
+        <div className="flex items-center gap-2">
+          <span className="truncate text-[16.5px] font-bold tracking-tight text-strong">{job.name}</span>
+          {priority && (
+            <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-danger px-2 py-0.5 text-[11px] font-extrabold text-white">
+              <Icon.alert width={11} height={11} /> {priority.label}
+            </span>
           )}
-          {self && (
+          {self && !priority && (
             <span className="shrink-0 rounded-full bg-accent-tint px-2 py-0.5 text-[11px] font-extrabold text-accent">Added by you</span>
           )}
         </div>
@@ -78,69 +70,30 @@ function JobRow({ job, accent, self, onOpen }) {
       </div>
       <button type="button" aria-label={`Call ${job.name}`} disabled={!job.phone}
         onClick={(e) => { e.stopPropagation(); callPhone(job.phone); }}
-        className="grid h-[46px] w-[46px] shrink-0 place-items-center rounded-full bg-brand-tint text-brand-dark disabled:opacity-40">
+        className={cx(
+          "grid h-[46px] w-[46px] shrink-0 place-items-center rounded-full disabled:opacity-40",
+          priority ? "bg-surface text-danger" : "bg-brand-tint text-brand-dark"
+        )}>
         <Icon.phone width={20} height={20} />
       </button>
     </div>
   );
 }
 
-/* The "Do first" hero (mockup .hero.pending). */
-function PendingHero({ job, onOpen }) {
-  return (
-    <div className="overflow-hidden rounded-[20px] border-[1.5px] border-warn-tint bg-surface shadow-[0_8px_22px_rgba(232,113,10,.16)]">
-      <div className="p-4">
-        <span className="inline-flex items-center gap-1.5 rounded-full bg-warn-tint px-2.5 py-1 text-[11.5px] font-extrabold uppercase tracking-wide text-warn-fg">
-          <Icon.alert width={13} height={13} /> Pending
-        </span>
-        <div className="mt-1.5 text-[23px] font-extrabold tracking-tight text-strong">{job.name}</div>
-        <div className="mt-1.5 flex gap-4 text-sm text-muted">
-          <span className="inline-flex items-center gap-1.5"><Icon.pin width={15} height={15} /> {job.area}</span>
-          <span className="inline-flex min-w-0 items-center gap-1.5"><Icon.drop width={15} height={15} /> <span className="truncate">{job.issue}</span></span>
-        </div>
-        <div className="mt-3.5 flex gap-2">
-          <HeroAct label={`Call ${job.name}`} disabled={!job.phone} onClick={() => callPhone(job.phone)}>
-            <Icon.phone width={19} height={19} /><span>Call</span>
-          </HeroAct>
-          <HeroAct label={`WhatsApp ${job.name}`} disabled={!job.phone} green onClick={() => openWhatsApp(job.phone)}>
-            <Icon.whatsapp width={19} height={19} /><span>WhatsApp</span>
-          </HeroAct>
-          <HeroAct label={`Map to ${job.area}`} disabled={!job.address} onClick={() => openMaps(job.address)}>
-            <Icon.pin width={19} height={19} /><span>Map</span>
-          </HeroAct>
-        </div>
-      </div>
-      <button type="button" onClick={() => onOpen(job)}
-        className="flex w-full items-center justify-center gap-2 bg-warn py-[17px] text-[18px] font-semibold text-white">
-        Start This Job <Icon.chevron width={18} height={18} />
-      </button>
-    </div>
-  );
-}
-
-const HeroAct = ({ label, disabled, green, onClick, children }) => (
-  <button type="button" aria-label={label} disabled={disabled}
-    onClick={(e) => { e.stopPropagation(); onClick(); }}
-    className={cx(
-      "flex min-h-[52px] flex-1 flex-col items-center justify-center gap-1 rounded-xl text-[13px] font-semibold disabled:opacity-40",
-      green ? "bg-ok-tint text-wa-dark" : "bg-tonal text-brand"
-    )}>
-    {children}
-  </button>
-);
-
 export function HomeV2({ jobs = [], loading, error, staleWarning, onRetry, onOpen = () => {}, onNewCall = () => {} }) {
-  const { pendingJobs, todayJobs, doneToday, activeCount } = useMemo(() => {
-    const done = jobs.filter(CLOSED);
-    const pending = jobs.filter((j) => !CLOSED(j) && j.bucket === "pending");
-    const today = jobs.filter((j) => !CLOSED(j) && j.bucket !== "pending");
-    return {
-      pendingJobs: pending,
-      todayJobs: today,
-      doneToday: done.filter((j) => closedIST(j) === istToday()).length,
-      activeCount: pending.length + today.length,
-    };
-  }, [jobs]);
+  // Re-read the clock every few minutes so a call crosses the 24-hour line
+  // while the screen is simply left open.
+  const [now, setNow] = useState(Date.now);
+  useEffect(() => {
+    const t = setInterval(() => setNow(Date.now()), 5 * 60 * 1000);
+    return () => clearInterval(t);
+  }, []);
+
+  const rows = useMemo(() => {
+    const open = jobs.filter((j) => !CLOSED(j)).map((job, i) => ({ job, i, priority: priorityOf(job, now) }));
+    // High priority first (revisits, then overdue); otherwise the server's order.
+    return open.sort((a, b) => (a.priority?.rank ?? 2) - (b.priority?.rank ?? 2) || a.i - b.i);
+  }, [jobs, now]);
 
   if (error) {
     return (
@@ -160,14 +113,11 @@ export function HomeV2({ jobs = [], loading, error, staleWarning, onRetry, onOpe
   if (loading) {
     return (
       <>
-        <div className="skeleton mt-2 h-24 w-full rounded-2xl" />
+        <div className="mt-2"><SkeletonJobCard /></div>
         <div className="mt-3"><SkeletonJobCard /></div>
       </>
     );
   }
-
-  const hero = pendingJobs[0];
-  const restPending = pendingJobs.slice(1);
 
   return (
     <>
@@ -187,41 +137,14 @@ export function HomeV2({ jobs = [], loading, error, staleWarning, onRetry, onOpe
         </div>
       )}
 
-      <>
-          {/* Today's progress (mockup .hprog) */}
-          <div className="mt-3 flex items-center gap-3.5 rounded-2xl bg-surface px-4 py-3 shadow-card">
-            <Ring done={doneToday} total={doneToday + activeCount} />
-            <div className="flex-1">
-              <div className="text-[15px] font-bold text-strong">Today's work</div>
-              <div className="mt-0.5 text-[12.5px] text-muted">{doneToday} done · {activeCount} to go</div>
-              <div className="mt-2 h-[9px] overflow-hidden rounded-full bg-tonal">
-                {/* Same figures as the ring beside it. The bar was still on the
-                    all-time count, so it sat pinned near full while the ring
-                    showed the real day — two numbers for one thing, disagreeing. */}
-                <i className="block h-full rounded-full bg-ok"
-                  style={{ width: `${doneToday + activeCount ? (doneToday / (doneToday + activeCount)) * 100 : 0}%` }} />
-              </div>
-            </div>
-          </div>
-
-          {pendingJobs.length > 0 && (
-            <>
-              <SecHead tone="amber" label="Do first — Pending" count={pendingJobs.length} />
-              <PendingHero job={hero} onOpen={onOpen} />
-              {restPending.map((j) => <JobRow key={j.id} job={j} accent="amber" onOpen={onOpen} />)}
-            </>
-          )}
-
-          <SecHead tone="blue" label="Today" count={todayJobs.length} />
-          {todayJobs.length === 0 && (
-            <div className="mt-2 rounded-2xl bg-surface px-4 py-6 text-center text-sm font-medium text-subtle shadow-card">
-              Nothing else scheduled for today.
-            </div>
-          )}
-          {todayJobs.map((j) => (
-            <JobRow key={j.id} job={j} accent={j.work?.added_by_tech ? "purple" : "blue"} self={j.work?.added_by_tech} onOpen={onOpen} />
-          ))}
-      </>
+      {rows.length === 0 && (
+        <div className="mt-2 rounded-2xl bg-surface px-4 py-8 text-center text-sm font-medium text-subtle shadow-card">
+          No calls right now.
+        </div>
+      )}
+      {rows.map(({ job, priority }) => (
+        <JobRow key={job.id} job={job} priority={priority} onOpen={onOpen} />
+      ))}
 
       <div className="h-24" />
 
