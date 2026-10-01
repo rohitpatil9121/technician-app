@@ -158,7 +158,12 @@ const seedJobs = () => [
       parts: [], nextService: "6 months", tech_photos: [photoDataUrl("Site photo")],
     },
   },
-].map((j) => ({ ...j, bucket: ["ON_THE_WAY", "ESTIMATE_SENT", "REJECTED"].includes(j.status) ? "pending" : "today" }));
+].map((j, i) => {
+  const bucket = ["ON_THE_WAY", "ESTIMATE_SENT", "REJECTED"].includes(j.status) ? "pending" : "today";
+  // Held since yesterday for the "pending" ones; the fourth job is a revisit.
+  const assignedAt = new Date(Date.now() - (bucket === "pending" ? 30 : 3) * 3600 * 1000).toISOString();
+  return { ...j, bucket, assignedAt, revisit: i === 3 };
+});
 
 const REVIEWS = {
   average: 4.7, jobsRated: 38, thisWeek: 4.9, fiveStar: 31, topStreak: 5, needsWork: 3,
