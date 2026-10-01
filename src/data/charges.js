@@ -3,8 +3,8 @@
 // `charge` ids still ride to the backend for CHARGE_LABELS / CHARGE_FREE compat.
 export const CALL_TYPES = [
   { id: "service", icon: "wrench", tone: "blue", label: "Service", sub: "Normal paid service" },
-  { id: "warranty", icon: "shield", tone: "green", label: "Warranty / AMC", sub: "Under warranty or AMC" },
-  { id: "repeat", icon: "repeat", tone: "purple", label: "Repeat Call", sub: "Same problem in 7 days" },
+  { id: "warranty", icon: "shield", tone: "green", label: "Warranty", sub: "Under warranty" },
+  { id: "repeat", icon: "repeat", tone: "purple", label: "Revisit", sub: "Same problem in 7 days" },
   { id: "installation", icon: "install", tone: "amber", label: "Installation", sub: "New machine fit" },
 ];
 
@@ -41,6 +41,6 @@ export const chargeTypes = [
   { id: "service", label: "Service Charge (repair done)", amount: 250 },
   { id: "visit", label: "Visit Charge (no repair)", amount: 250 },
   { id: "warranty", label: "No Charge (Under Warranty)", amount: 0 },
-  { id: "repeat", label: "Repeat Call (within 7 days)", amount: 0 },
+  { id: "repeat", label: "Revisit (within 7 days)", amount: 0 },
   { id: "installation", label: "Installation", amount: 250 },
 ];

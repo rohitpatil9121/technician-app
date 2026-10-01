@@ -2,20 +2,24 @@ import { useMemo, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useJobs } from "../store/JobsContext.jsx";
 import AppHeader from "../components/AppHeader.jsx";
-import { Icon, SkeletonJobCard, cx } from "../components/ui.jsx";
+import { Icon, SkeletonJobCard, MDialog, MDialogBtn, cx } from "../components/ui.jsx";
 import { callPhone } from "../lib/contact.js";
+import { rupeeAmt } from "../lib/format.js";
+import { api } from "../lib/api.js";
 
-/* Home: every open call in ONE list, every row the same size (owner's rule).
+/* Home: a Pending / Completed switch under the technician's name, then the list.
 
-   Nothing sits above the list — no "Today's work" card, no enlarged first job.
-   The only thing that sets a call apart is colour: a call that needs doing
+   Pending is every open call in ONE list, every row the same size (owner's
+   rule) — no "Today's work" card, no enlarged first job. Completed is the jobs
+   he has finished, newest day first.
+
+   On Pending the only thing that sets a call apart is colour: a call that needs doing
    first is shaded red and carries a tag saying why —
 
      Revisit              the job came back (the request was reopened)
      More than 24 hours   he has had it for over a day
 
-   Those rows lead the list; the rest follow in the order the server gave.
-   Finished jobs are not listed here — they have their own tab, My Work. */
+   Those rows lead the list; the rest follow in the order the server gave. */
 
 const CLOSED = (j) => j.status === "CLOSED";
 const DAY_MS = 24 * 3600 * 1000;
@@ -35,6 +39,48 @@ function priorityOf(j, now) {
   if (isRevisit(j)) return { rank: 0, label: "Revisit" };
   if (isOverdue(j, now)) return { rank: 1, label: "More than 24 hours" };
   return null;
+}
+
+/* Which IST day a job was finished on, and how that day reads as a heading. */
+const istDay = (d) => new Date(d).toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" });
+const closedDayLabel = (j) => {
+  const at = j.work?.closed_at;
+  if (!at) return String(j.when || "Earlier").split(",")[0]; // closed before the stamp existed
+  const d = istDay(at);
+  if (d === istDay(Date.now())) return "Today";
+  if (d === istDay(Date.now() - DAY_MS)) return "Yesterday";
+  return new Date(at).toLocaleDateString("en-IN", { timeZone: "Asia/Kolkata", day: "numeric", month: "short" });
+};
+
+/* A finished job: who, where, what was billed — and a Revisit button for when
+   that customer asks him to come back. */
+function DoneRow({ job, onOpen, onRevisit }) {
+  const total = Number(job.work?.total ?? 0);
+  return (
+    <div role="button" tabIndex={0} onClick={() => onOpen(job)}
+      onKeyDown={(e) => { if (e.key === "Enter") onOpen(job); }}
+      className="m3r mt-2.5 cursor-pointer rounded-2xl bg-surface px-3.5 py-3 shadow-card">
+      <div className="flex items-center gap-3">
+        <span className="grid h-[30px] w-[30px] shrink-0 place-items-center rounded-full bg-ok-tint text-ok-fg">
+          <Icon.check width={17} height={17} strokeWidth={2.5} />
+        </span>
+        <div className="min-w-0 flex-1">
+          <div className="truncate text-[15.5px] font-bold text-strong">{job.name}</div>
+          <div className="text-[13px] text-subtle">{job.area}</div>
+        </div>
+        <span className={cx("tnum shrink-0 text-sm font-bold", total === 0 ? "text-muted" : "text-ok-fg")}>
+          {total === 0 ? "Free" : rupeeAmt(total)}
+        </span>
+      </div>
+      {onRevisit && (
+        <button type="button" aria-label={`Revisit ${job.name}`}
+          onClick={(e) => { e.stopPropagation(); onRevisit(job); }}
+          className="mt-2.5 flex min-h-[44px] w-full items-center justify-center gap-2 rounded-full border border-danger/40 bg-surface text-[14.5px] font-bold text-danger transition active:scale-[0.985]">
+          <Icon.repeat width={16} height={16} /> Revisit
+        </button>
+      )}
+    </div>
+  );
 }
 
 /* One call. Same size for every job; red shade + tag when it is high priority. */
@@ -80,7 +126,24 @@ function JobRow({ job, priority, onOpen }) {
   );
 }
 
-export function HomeV2({ jobs = [], loading, error, staleWarning, onRetry, onOpen = () => {}, onNewCall = () => {} }) {
+export function HomeV2({ jobs = [], loading, error, staleWarning, onRetry, onOpen = () => {}, onNewCall = () => {}, onRevisit }) {
+  /* Revisit is confirmed before anything is sent: it opens a new call and the
+     customer gets a WhatsApp, so a stray tap must not do it. */
+  const [revisitJob, setRevisitJob] = useState(null);
+  const [revisitBusy, setRevisitBusy] = useState(false);
+  const [revisitErr, setRevisitErr] = useState("");
+  const confirmRevisit = async () => {
+    if (revisitBusy) return;
+    setRevisitBusy(true); setRevisitErr("");
+    try {
+      await onRevisit(revisitJob);
+      setRevisitJob(null);
+      setTab("pending"); // the new call is at the top of Pending, tagged Revisit
+    } catch (e) {
+      setRevisitErr(e.message || "Could not open the revisit. Check your connection and try again.");
+    } finally { setRevisitBusy(false); }
+  };
+
   // Re-read the clock every few minutes so a call crosses the 24-hour line
   // while the screen is simply left open.
   const [now, setNow] = useState(Date.now);
@@ -88,6 +151,21 @@ export function HomeV2({ jobs = [], loading, error, staleWarning, onRetry, onOpe
     const t = setInterval(() => setNow(Date.now()), 5 * 60 * 1000);
     return () => clearInterval(t);
   }, []);
+
+  const [tab, setTab] = useState("pending");
+
+  // Finished jobs grouped by the day they were closed, in the server's order
+  // (newest first).
+  const doneGroups = useMemo(() => {
+    const groups = [];
+    for (const j of jobs.filter(CLOSED)) {
+      const day = closedDayLabel(j);
+      const g = groups.find((x) => x.day === day);
+      if (g) g.items.push(j); else groups.push({ day, items: [j] });
+    }
+    return groups;
+  }, [jobs]);
+  const doneCount = doneGroups.reduce((s, g) => s + g.items.length, 0);
 
   const rows = useMemo(() => {
     const open = jobs.filter((j) => !CLOSED(j)).map((job, i) => ({ job, i, priority: priorityOf(job, now) }));
@@ -137,16 +215,68 @@ export function HomeV2({ jobs = [], loading, error, staleWarning, onRetry, onOpe
         </div>
       )}
 
-      {rows.length === 0 && (
-        <div className="mt-2 rounded-2xl bg-surface px-4 py-8 text-center text-sm font-medium text-subtle shadow-card">
-          No calls right now.
-        </div>
+      {/* Pending / Completed switch, right under the name. */}
+      <div className="mt-1 flex overflow-hidden rounded-full border border-hair">
+        {[["pending", "Pending", rows.length, Icon.alert], ["completed", "Completed", doneCount, Icon.check]].map(([key, label, count, Ic], i) => (
+          <button key={key} type="button" onClick={() => setTab(key)} aria-pressed={tab === key}
+            className={cx(
+              "flex min-h-[46px] flex-1 items-center justify-center gap-2 text-[15px] font-semibold",
+              i === 0 && "border-r border-hair",
+              tab === key ? "bg-brand-tint font-bold text-brand-dark" : "text-muted"
+            )}>
+            <Ic width={16} height={16} /> {label}
+            <span className={cx("rounded-full px-2 py-0.5 text-xs font-extrabold", tab === key ? "bg-brand-dark text-white" : "bg-tonal text-muted")}>{count}</span>
+          </button>
+        ))}
+      </div>
+
+      {tab === "pending" ? (
+        <>
+          {rows.length === 0 && (
+            <div className="mt-2.5 rounded-2xl bg-surface px-4 py-8 text-center text-sm font-medium text-subtle shadow-card">
+              No pending calls right now.
+            </div>
+          )}
+          {rows.map(({ job, priority }) => (
+            <JobRow key={job.id} job={job} priority={priority} onOpen={onOpen} />
+          ))}
+        </>
+      ) : (
+        <>
+          {doneGroups.length === 0 && (
+            <div className="mt-2.5 rounded-2xl bg-surface px-4 py-8 text-center text-sm font-medium text-subtle shadow-card">
+              No completed jobs yet.
+            </div>
+          )}
+          {doneGroups.map((g) => (
+            <div key={g.day}>
+              <div className="mx-1 mb-1 mt-4 text-[13px] font-extrabold text-muted">{g.day}</div>
+              {g.items.map((j) => (
+                <DoneRow key={j.id} job={j} onOpen={onOpen}
+                  onRevisit={onRevisit ? (job) => { setRevisitErr(""); setRevisitJob(job); } : undefined} />
+              ))}
+            </div>
+          ))}
+        </>
       )}
-      {rows.map(({ job, priority }) => (
-        <JobRow key={job.id} job={job} priority={priority} onOpen={onOpen} />
-      ))}
 
       <div className="h-24" />
+
+      {revisitJob && (
+        <MDialog title={`Revisit ${revisitJob.name}?`} onClose={() => !revisitBusy && setRevisitJob(null)}
+          icon={<Icon.repeat width={22} height={22} className="text-danger" />} iconClass="bg-danger-tint"
+          actions={
+            <>
+              <MDialogBtn disabled={revisitBusy} onClick={() => setRevisitJob(null)}>Cancel</MDialogBtn>
+              <MDialogBtn danger bold disabled={revisitBusy} onClick={confirmRevisit}>
+                {revisitBusy ? "Opening…" : "Yes, Revisit"}
+              </MDialogBtn>
+            </>
+          }>
+          This opens a new call for this customer in Pending, marked Revisit. The customer gets a WhatsApp message.
+          {revisitErr && <span className="mt-2 block font-semibold text-danger">{revisitErr}</span>}
+        </MDialog>
+      )}
 
       {/* Extended FAB (mockup .fab, M3 16px radius) */}
       <button type="button" onClick={onNewCall}
@@ -159,7 +289,7 @@ export function HomeV2({ jobs = [], loading, error, staleWarning, onRetry, onOpe
 
 /* Route-level wrapper binding the store. */
 export default function HomeScreen() {
-  const { jobs, live, jobsLoading, jobsError, loadJobs } = useJobs();
+  const { jobs, live, jobsLoading, jobsError, loadJobs, addJob } = useJobs();
   const nav = useNavigate();
 
   useEffect(() => {
@@ -180,6 +310,11 @@ export default function HomeScreen() {
         onRetry={() => loadJobs()}
         onOpen={(job) => nav(`/job/${job.id}`)}
         onNewCall={() => nav("/new-call")}
+        onRevisit={async (job) => {
+          const { job: created } = await api.revisit(job.id);
+          if (!created) throw new Error("Could not open the revisit");
+          addJob(created);
+        }}
       />
     </>
   );

@@ -17,7 +17,7 @@ import { pendingPhotos } from "../lib/outbox.js";
 import UpiQr from "../components/UpiQr.jsx";
 import {
   Icon, IconChip, Card, FLabel, PrimaryButton, GhostButton, MDialog, MDialogBtn, MSheet, PlusMinus,
-  input, cx, Skeleton, RupeeCount, JobPhoto,
+  input, cx, Skeleton, JobPhoto,
 } from "../components/ui.jsx";
 import { stepIndexForStatus, STEPS } from "../lib/workflow.js";
 
@@ -44,7 +44,7 @@ const partQty = (p) => Math.max(1, Math.min(QTY_MAX, Number(p?.qty) || 1));
 const partLineTotal = (p) => Number(p?.price || 0) * partQty(p);
 /* Summary rows read as "RO Membrane × 2" only when there really is more than one
    — a "× 1" on every line is noise the technician has to read past. */
-const partLabel = (p) => (partQty(p) > 1 ? `${p.name} × ${partQty(p)}` : p.name);
+const partLabel = (p) => `${partQty(p) > 1 ? `${p.name} × ${partQty(p)}` : p.name}${p.warranty ? " (Under warranty)" : ""}`;
 
 /* Sub-line under a part's name on the bill: "BRAND · SKU". Both halves are
    optional — sku is nullable on stock_items (and unset on every row today), and
@@ -57,9 +57,11 @@ const partMeta = (p) => {
   return [brand && brand.toLowerCase() !== "other" ? brand : "", sku].filter(Boolean).join(" · ");
 };
 
-/* A part's price has to sit between the floor the office set (base_cost) and its
-   ceiling (MRP, the catalog price), both stamped onto the part when it was added.
-   Returns the limit that was breached, or "" when the price is fine.
+/* A part with no office-fixed price is free to edit, up to its ceiling (MRP, the
+   catalog price, stamped onto the part when it was added). There is no minimum
+   any more: the office now fixes the price outright instead (owner's decision),
+   and a fixed part is not editable at all. Returns the limit that was breached,
+   or "" when the price is fine.
 
    This used to be silent: the typed number was clamped, so a technician who keyed
    ₹25 against a ₹20 MRP simply watched it turn into ₹20 with no reason given. The
@@ -68,10 +70,9 @@ const partMeta = (p) => {
    sent, so the number now stands as typed and the breach is shown in red instead
    of being corrected behind the technician's back. */
 const priceLimit = (p) => {
+  if (p?.warranty) return ""; // replaced under warranty ⇒ ₹0 on purpose
   const v = Number(p?.price || 0);
-  const min = Number(p?.minPrice || 0);
   const max = Number(p?.mrp || 0);
-  if (min > 0 && v < min) return `Min ${rupeeAmt(min)}`;
   if (max > 0 && v > max) return `MRP ${rupeeAmt(max)}`;
   return "";
 };
@@ -218,7 +219,15 @@ function JobDetailInner({ job }) {
       let changed = false;
       const next = prev.map((p) => {
         const f = fixedById.get(p.id);
-        if (f == null || (p.fixed && Number(p.price) === f)) return p;
+        if (f == null) return p;
+        // Under warranty the part is billed at ₹0; keep the fixed figure only as
+        // the price it goes back to if the technician switches warranty off.
+        if (p.warranty) {
+          if (p.fixed && Number(p.listPrice) === f) return p;
+          changed = true;
+          return { ...p, listPrice: f, mrp: f, minPrice: f, fixed: true };
+        }
+        if (p.fixed && Number(p.price) === f) return p;
         changed = true;
         return { ...p, price: f, mrp: f, minPrice: f, fixed: true };
       });
@@ -342,7 +351,6 @@ function JobDetailInner({ job }) {
   const estTotal = serviceCharge + partsTotal;
   const billTotal = Number(w.total ?? estTotal);
   const typeOf = CALL_TYPES.find((c) => c.id === callType) || CALL_TYPES[0];
-  const svcLabel = (v) => (v === 0 ? "Free" : rupeeAmt(v));
 
   /* Picker rows are a toggle, not a counter: tap once to add the part, tap the
      same row again to take it off the bill. Repeated taps used to stack
@@ -357,7 +365,20 @@ function JobDetailInner({ job }) {
   // Kept as typed (only nonsense is rejected) so priceLimit can flag it in red —
   // see the note on priceLimit for why this no longer clamps to MRP.
   const setPartPrice = (i, n) =>
-    setParts((prev) => prev.map((p, idx) => (idx === i && !p.fixed ? { ...p, price: Math.max(0, Math.floor(Number(n) || 0)) } : p)));
+    setParts((prev) => prev.map((p, idx) => (idx === i && !p.fixed && !p.warranty ? { ...p, price: Math.max(0, Math.floor(Number(n) || 0)) } : p)));
+  /* "Under warranty": the part is replaced free, so its price drops to ₹0 and is
+     locked there. The price it had is remembered and comes back if the button is
+     tapped again. The flag travels with the bill — the server only accepts ₹0 on
+     a part that carries it. */
+  const toggleWarranty = (i) =>
+    setParts((prev) => prev.map((p, idx) => {
+      if (idx !== i) return p;
+      if (p.warranty) {
+        const { warranty: _w, listPrice, ...rest } = p;
+        return { ...rest, price: Number(listPrice ?? p.mrp ?? 0) };
+      }
+      return { ...p, warranty: true, listPrice: Number(p.price || 0), price: 0 };
+    }));
   /* `price` is the per-piece rate; the line the customer pays is price × qty.
      Both writers derive the new quantity inside the updater so two quick taps on
      + can't both read the same stale row and lose one of the increments. */
@@ -961,8 +982,8 @@ function JobDetailInner({ job }) {
                 {/* Office-fixed price: shown, not editable. Plain text rather
                     than a disabled field, so it does not look like something
                     that is merely broken. */}
-                {p.fixed ? (
-                  <span aria-label={`Rate for ${p.name}, fixed by office`}
+                {p.fixed || p.warranty ? (
+                  <span aria-label={p.warranty ? `Rate for ${p.name}, free under warranty` : `Rate for ${p.name}, fixed by office`}
                     className="tnum w-[86px] min-w-[64px] rounded-full bg-sunken px-2 py-2 text-center text-[15px] font-bold text-muted">
                     {rupeeAmt(p.price)}
                   </span>
@@ -981,28 +1002,33 @@ function JobDetailInner({ job }) {
                   {rupeeAmt(partLineTotal(p))}
                 </span>
               </div>
-              {p.fixed && (
+              {p.fixed && !p.warranty && (
                 <div className="mt-1.5 text-[12.5px] font-semibold text-subtle">Fixed price — set by office</div>
               )}
+              {/* Replaced free under warranty: one tap makes the part ₹0, a second
+                  tap puts its price back. */}
+              <button type="button" aria-pressed={!!p.warranty} onClick={() => toggleWarranty(i)}
+                className={cx(
+                  "mt-2.5 flex min-h-[44px] w-full items-center justify-center gap-2 rounded-full text-[14.5px] font-bold transition active:scale-[0.985]",
+                  p.warranty ? "bg-ok text-white" : "border border-hair bg-surface text-muted"
+                )}>
+                {p.warranty && <Icon.check width={17} height={17} strokeWidth={2.5} />}
+                {p.warranty ? "Under warranty — ₹0 (tap to charge)" : "Under warranty"}
+              </button>
               {/* The limit that was breached, named. "Above MRP" alone would leave
                   the technician guessing what the ceiling actually is. */}
               {overLimit && (
                 <div role="alert" className="mt-2 flex items-center gap-1.5 text-[13px] font-bold text-danger-fg">
                   <Icon.alert width={15} height={15} className="shrink-0" />
-                  {priceLimit(p).startsWith("MRP") ? `Above MRP — max ${overLimit.slice(4)}` : `Below minimum — min ${overLimit.slice(4)}`}
+                  Above MRP — max {overLimit.slice(4)}
                 </div>
               )}
             </div>
           );
         })}
-        <Card className="mt-4">
-          <Row l="Service charge" r={svcLabel(serviceCharge)} muted />
-          {parts.map((p, i) => <Row key={p.id ?? i} l={partLabel(p)} r={rupeeAmt(partLineTotal(p))} muted />)}
-          <div className="mt-2 flex items-center justify-between border-t border-line pt-2.5">
-            <span className="text-[16px] font-bold text-strong">Total to collect</span>
-            <RupeeCount value={estTotal} className="tnum text-[28px] font-extrabold tracking-tight text-strong" />
-          </div>
-        </Card>
+        {/* No summary card here (owner's call): the same lines are listed on the
+            Payment screen that follows, so it only repeated them. The total rides
+            on the button below instead. */}
         {/* Says why the button below is dead. A disabled button with no reason is
             how the technician concludes the app is broken. */}
         {badPrice && (
@@ -1011,12 +1037,6 @@ function JobDetailInner({ job }) {
             A part is priced outside its allowed range. Fix the red one above to continue — the office will not accept this bill.
           </div>
         )}
-        <div className="mt-3 flex items-center gap-2.5 rounded-2xl bg-brand-tint p-3.5 text-[14.5px] font-medium text-brand-dark">
-          <Icon.eye width={19} height={19} className="shrink-0" />
-          {editBill
-            ? "Saving sends the customer the corrected amount on WhatsApp."
-            : "Show this price to the customer before starting."}
-        </div>
       </>
     );
     footer = editBill ? (
@@ -1025,7 +1045,7 @@ function JobDetailInner({ job }) {
           <Icon.back width={18} height={18} /> Cancel
         </GhostButton>
         <PrimaryButton className="flex-[1.4] !bg-ok" disabled={busy || badPrice} loading={busy} onClick={saveRevisit}>
-          <Icon.checkCircle width={18} height={18} /> Save Bill
+          <Icon.checkCircle width={18} height={18} /> Save Bill · {rupeeAmt(estTotal)}
         </PrimaryButton>
       </div>
     ) : (
@@ -1034,7 +1054,7 @@ function JobDetailInner({ job }) {
          then work-done before landing on Payment — so the office still gets
          work_done_at and the customer still gets both WhatsApp messages. */
       <PrimaryButton className="!bg-ok" disabled={busy || badPrice} loading={busy} onClick={collectPayment}>
-        <Icon.bag width={19} height={19} /> Collect Payment <Icon.chevron width={18} height={18} />
+        <Icon.bag width={19} height={19} /> Collect {rupeeAmt(estTotal)} <Icon.chevron width={18} height={18} />
       </PrimaryButton>
     );
   } else if (viewStep === 3) {
