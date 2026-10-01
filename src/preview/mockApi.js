@@ -27,7 +27,9 @@ const PARTS = [
   { id: "p1", name: "RO Membrane 80 GPD", brand: "kent", price: 1800, minPrice: 1500 },
   { id: "p2", name: "Sediment Filter", brand: "kent", price: 350, minPrice: 300 },
   { id: "p3", name: "Carbon Filter", brand: "kent", price: 420, minPrice: 350 },
-  { id: "p4", name: "UV Lamp", brand: "aquaguard", price: 950, minPrice: 800 },
+  // Office-fixed price — mirrors what /tech/parts sends: price and minPrice
+  // both equal the fixed figure, plus the `fixed` flag that locks the rate.
+  { id: "p4", name: "UV Lamp", brand: "aquaguard", price: 950, minPrice: 950, fixed: true },
   { id: "p5", name: "Pre-filter Candle", brand: "aquaguard", price: 260, minPrice: 200 },
   { id: "p6", name: "Booster Pump", brand: "aquaguard", price: 2400, minPrice: 2000 },
   { id: "p7", name: "Float Valve", brand: "oasis", price: 180, minPrice: 140 },
@@ -42,7 +44,8 @@ const seedJobs = () => [
     id: "1", code: "OG-2841", status: "NEW", name: "Sunita Deshmukh", area: "Kothrud",
     address: "Flat 302, Sai Residency, Kothrud, Pune", phone: "+919820011223",
     model: "Kent Grand Plus", issue: "No water coming from the purifier since yesterday morning.",
-    notes: "Please call before coming, gate closes at 8pm.", when: "Today, 10:30 AM",
+    notes: "Please call before coming, gate closes at 8pm.\nAlso please get 1 meter silicon outlet pipe\nOffice: priority customer",
+    when: "Today, 10:30 AM",
     visitCharge: 0, tags: ["Warranty Active"], rating: null,
     // Two customer photos so the Reach screen's "tap to open" path is walkable.
     customerPhotos: [photoDataUrl("Customer photo 1"), photoDataUrl("Customer photo 2")],
@@ -175,26 +178,22 @@ const REVIEWS = {
   ],
 };
 
+const RATES = { very_good: 300, average: 200, bad: 0 };
 const earnings = () => {
   const days = [];
-  for (let i = 0; i < 30; i += 1) {
-    const d = new Date(2026, 6, 21 - i);
-    const iso = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-    const billing = i === 0 ? 8400 : [0, 4200, 9800, 12400, 6100, 11200, 7300][i % 7];
-    const payout = Math.round(billing * 0.07);
-    days.push({
-      date: iso, billing, payout, target_hit: billing >= 10000, brand_rate: billing >= 10000 ? 0.1 : 0.06,
-      jobs: billing === 0 ? [] : [
-        { ticket_id: `OG-${2800 + i}`, payout: Math.round(payout * 0.6), payment_mode: i % 3 === 0 ? "online" : "cash", parts: [{ brand: "kent" }] },
-        { ticket_id: `OG-${2700 + i}`, payout: payout - Math.round(payout * 0.6), payment_mode: "cash", parts: [{ brand: "aquaguard" }, { brand: "oasis" }] },
-      ],
+  const ist = (d) => d.toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" });
+  for (let i = 0; i < 45; i += 1) {
+    const n = [3, 0, 4, 2, 5, 1, 3][i % 7];
+    if (!n) continue;
+    const jobs = Array.from({ length: n }, (_, k) => {
+      // Today's and yesterday's calls are mostly still waiting for a rating.
+      const feedback = i < 2 && k % 2 === 0 ? "pending" : ["very_good", "average", "very_good", "bad", "average"][(i + k) % 5];
+      return { ticket_id: `d${i}-${k}`, ticket_number: `OG-${2900 - i * 5 - k}`, feedback, pending: feedback === "pending",
+        payout: RATES[feedback === "pending" ? "average" : feedback] };
     });
+    days.push({ date: ist(new Date(Date.now() - i * 86400000)), jobs, jobs_count: n, payout: jobs.reduce((s, j) => s + j.payout, 0) });
   }
-  return {
-    total_payout: days.reduce((s, d) => s + d.payout, 0),
-    total_billing: days.reduce((s, d) => s + d.billing, 0),
-    days,
-  };
+  return { rates: RATES, total_payout: days.reduce((s, d) => s + d.payout, 0), days };
 };
 
 /* The backend's step machine, reduced to what the UI needs back: the status the

@@ -1,14 +1,13 @@
-import { useMemo, useState, useEffect } from "react";
+import { useMemo, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useJobs } from "../store/JobsContext.jsx";
 import AppHeader from "../components/AppHeader.jsx";
 import { Icon, IconChip, SkeletonJobCard, cx } from "../components/ui.jsx";
 import { callPhone, openMaps, openWhatsApp } from "../lib/contact.js";
-import { rupeeAmt } from "../lib/format.js";
 
-/* Home, Material 3 redesign (client mockup): Pending/Done segmented control,
-   a progress ring for today, a "Do first" amber hero, then plain job rows.
-   The FAB adds a walk-in call. */
+/* Home, Material 3 redesign (client mockup): a progress ring for today, a
+   "Do first" amber hero, then plain job rows. The FAB adds a walk-in call.
+   Finished jobs are not listed here — they have their own tab, My Work. */
 
 const CLOSED = (j) => j.status === "CLOSED";
 
@@ -24,17 +23,6 @@ const closedIST = (j) => {
   const at = j.work?.closed_at;
   return at ? new Date(at).toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" }) : null;
 };
-const closedDayLabel = (j) => {
-  const d = closedIST(j);
-  if (!d) return String(j.when || "Earlier").split(",")[0]; // pre-stamp jobs
-  if (d === istToday()) return "Today";
-  const y = new Date(Date.now() - 86400000).toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" });
-  if (d === y) return "Yesterday";
-  return new Date(j.work.closed_at).toLocaleDateString("en-IN", {
-    timeZone: "Asia/Kolkata", day: "numeric", month: "short",
-  });
-};
-
 /* SVG progress ring (mockup ringSVG). */
 function Ring({ done, total, size = 52, stroke = 7 }) {
   const r = (size - stroke) / 2;
@@ -141,56 +129,15 @@ const HeroAct = ({ label, disabled, green, onClick, children }) => (
   </button>
 );
 
-/* Done row (mockup .donerow). */
-function DoneRow({ job, onOpen }) {
-  const total = Number(job.work?.total ?? 0);
-  const free = total === 0;
-  /* Why nothing was charged, when we know. Null when we don't — the fallback
-     used to be the word "Free" itself, which rendered as "Free · Free" on every
-     job billed at zero for no recorded reason. */
-  const freeWhy = job.work?.call_type === "warranty" || job.work?.charge === "warranty" ? "Warranty"
-    : job.work?.call_type === "repeat" || job.work?.charge === "repeat" ? "Repeat" : null;
-  return (
-    <div role="button" tabIndex={0} onClick={() => onOpen(job)}
-      onKeyDown={(e) => { if (e.key === "Enter") onOpen(job); }}
-      className="m3r mt-2.5 flex cursor-pointer items-center gap-3 rounded-2xl bg-surface px-3.5 py-3 shadow-card">
-      <span className="grid h-[30px] w-[30px] shrink-0 place-items-center rounded-full bg-ok-tint text-ok-fg">
-        <Icon.check width={17} height={17} strokeWidth={2.5} />
-      </span>
-      <div className="min-w-0 flex-1">
-        <div className="truncate text-[15.5px] font-bold text-strong">{job.name}</div>
-        <div className="text-[13px] text-subtle">{job.area}</div>
-      </div>
-      <span className={cx("tnum shrink-0 text-sm font-bold", free ? "text-muted" : "text-ok-fg")}>
-        {free ? (freeWhy ? `Free · ${freeWhy}` : "Free") : rupeeAmt(total)}
-      </span>
-    </div>
-  );
-}
-
 export function HomeV2({ jobs = [], loading, error, staleWarning, onRetry, onOpen = () => {}, onNewCall = () => {} }) {
-  const [tab, setTab] = useState("pending");
-
-  const { pendingJobs, todayJobs, doneGroups, doneToday, doneCount, activeCount } = useMemo(() => {
+  const { pendingJobs, todayJobs, doneToday, activeCount } = useMemo(() => {
     const done = jobs.filter(CLOSED);
     const pending = jobs.filter((j) => !CLOSED(j) && j.bucket === "pending");
     const today = jobs.filter((j) => !CLOSED(j) && j.bucket !== "pending");
-    // Group done jobs by the day they were finished, newest first. `when` is the
-    // day the job was GIVEN to the technician, which is not the day he closed it,
-    // so the closing stamp is used wherever the job carries one.
-    const groups = [];
-    for (const j of done) {
-      const day = closedDayLabel(j);
-      const g = groups.find((x) => x.day === day);
-      if (g) g.items.push(j);
-      else groups.push({ day, items: [j] });
-    }
     return {
       pendingJobs: pending,
       todayJobs: today,
-      doneGroups: groups,
       doneToday: done.filter((j) => closedIST(j) === istToday()).length,
-      doneCount: done.length,
       activeCount: pending.length + today.length,
     };
   }, [jobs]);
@@ -240,27 +187,7 @@ export function HomeV2({ jobs = [], loading, error, staleWarning, onRetry, onOpe
         </div>
       )}
 
-      {/* Segmented control (mockup .homeseg, M3 outlined variant) */}
-      <div className="mt-1 flex overflow-hidden rounded-full border border-hair">
-        <button type="button" onClick={() => setTab("pending")} aria-pressed={tab === "pending"}
-          className={cx(
-            "flex min-h-[46px] flex-1 items-center justify-center gap-2 border-r border-hair text-[15px] font-semibold",
-            tab === "pending" ? "bg-brand-tint font-bold text-brand-dark" : "text-muted"
-          )}>
-          <Icon.alert width={16} height={16} /> Pending
-          <span className="rounded-full bg-brand-dark px-2 py-0.5 text-xs font-extrabold text-white">{activeCount}</span>
-        </button>
-        <button type="button" onClick={() => setTab("done")} aria-pressed={tab === "done"}
-          className={cx(
-            "flex min-h-[46px] flex-1 items-center justify-center gap-2 text-[15px] font-semibold",
-            tab === "done" ? "bg-brand-tint font-bold text-brand-dark" : "text-muted"
-          )}>
-          <Icon.check width={16} height={16} /> Done
-        </button>
-      </div>
-
-      {tab === "pending" ? (
-        <>
+      <>
           {/* Today's progress (mockup .hprog) */}
           <div className="mt-3 flex items-center gap-3.5 rounded-2xl bg-surface px-4 py-3 shadow-card">
             <Ring done={doneToday} total={doneToday + activeCount} />
@@ -294,22 +221,7 @@ export function HomeV2({ jobs = [], loading, error, staleWarning, onRetry, onOpe
           {todayJobs.map((j) => (
             <JobRow key={j.id} job={j} accent={j.work?.added_by_tech ? "purple" : "blue"} self={j.work?.added_by_tech} onOpen={onOpen} />
           ))}
-        </>
-      ) : (
-        <>
-          {doneGroups.length === 0 && (
-            <div className="mt-4 rounded-2xl bg-surface px-4 py-8 text-center text-sm font-medium text-subtle shadow-card">
-              No finished jobs yet.
-            </div>
-          )}
-          {doneGroups.map((g) => (
-            <div key={g.day}>
-              <div className="mx-1 mb-1 mt-4 text-[13px] font-extrabold text-muted">{g.day}</div>
-              {g.items.map((j) => <DoneRow key={j.id} job={j} onOpen={onOpen} />)}
-            </div>
-          ))}
-        </>
-      )}
+      </>
 
       <div className="h-24" />
 
