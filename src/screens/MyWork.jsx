@@ -11,8 +11,8 @@ import { rupeeAmt } from "../lib/format.js";
    Incentive is a fixed amount per closed call, chosen by the customer's rating,
    and it is paid weekly. So the screen answers exactly that: how many calls this
    week, how much for them, and the sum worked out line by line so he can check
-   it himself. The finished jobs that used to sit behind Home's "Done" switch
-   live here too.
+   it himself. Under each date sits every call of that day with its rating and
+   what it paid — this replaces the "Done" list Home used to have.
 
    A week is Monday to Sunday, in IST. */
 
@@ -58,31 +58,34 @@ const SecH = ({ children }) => (
   <div className="mx-1 mb-2 mt-5 text-[12.5px] font-semibold uppercase tracking-wide text-muted">{children}</div>
 );
 
-/* Finished job row — moved here from Home's old "Done" tab. */
-function DoneRow({ job, onOpen }) {
-  const total = Number(job.work?.total ?? 0);
-  const free = total === 0;
-  const freeWhy = job.work?.call_type === "warranty" || job.work?.charge === "warranty" ? "Warranty"
-    : job.work?.call_type === "repeat" || job.work?.charge === "repeat" ? "Repeat" : null;
+// How a call's rating reads on its row.
+const RATING = {
+  very_good: { label: "Very Good", cls: "bg-ok-tint text-ok-fg" },
+  average: { label: "Average", cls: "bg-tonal text-muted" },
+  bad: { label: "Bad", cls: "bg-danger-tint text-danger" },
+  pending: { label: "No rating yet", cls: "bg-warn-tint text-warn-fg" },
+};
+
+/* One call under its date: who, the rating, what it pays. Opens the job when
+   the app still has it; otherwise it is just a line. */
+function CallRow({ call, job, onOpen }) {
+  const r = RATING[call.feedback] || RATING.average;
+  const name = call.customer_name || job?.name;
+  const Tag = job ? "button" : "div";
   return (
-    <div role="button" tabIndex={0} onClick={() => onOpen(job)}
-      onKeyDown={(e) => { if (e.key === "Enter") onOpen(job); }}
-      className="m3r mt-2.5 flex cursor-pointer items-center gap-3 rounded-2xl bg-surface px-3.5 py-3 shadow-card">
-      <span className="grid h-[30px] w-[30px] shrink-0 place-items-center rounded-full bg-ok-tint text-ok-fg">
-        <Icon.check width={17} height={17} strokeWidth={2.5} />
-      </span>
+    <Tag type={job ? "button" : undefined} onClick={job ? () => onOpen(job) : undefined}
+      className="flex w-full items-center gap-2.5 border-t border-hair py-2.5 text-left">
       <div className="min-w-0 flex-1">
-        <div className="truncate text-[15.5px] font-bold text-strong">{job.name}</div>
-        <div className="text-[13px] text-subtle">{job.area}</div>
+        <div className="truncate text-[15px] font-semibold text-strong">{name || call.ticket_number || "Call"}</div>
+        <div className="mt-0.5 flex items-center gap-1.5 text-[12px] text-subtle">
+          <span className={cx("rounded-full px-2 py-0.5 text-[11px] font-bold", r.cls)}>{r.label}</span>
+          {name && call.ticket_number && <span className="truncate">{call.ticket_number}</span>}
+        </div>
       </div>
-      <span className={cx("tnum shrink-0 text-sm font-bold", free ? "text-muted" : "text-ok-fg")}>
-        {free ? (freeWhy ? `Free · ${freeWhy}` : "Free") : rupeeAmt(total)}
-      </span>
-    </div>
+      <span className="tnum shrink-0 text-[15px] font-bold text-strong">{rupeeAmt(call.payout)}</span>
+    </Tag>
   );
 }
-
-const closedIST = (j) => (j.work?.closed_at ? istDate(j.work.closed_at) : null);
 
 export default function MyWork() {
   const { jobs, live } = useJobs();
@@ -119,23 +122,18 @@ export default function MyWork() {
       perDay: Array.from({ length: 7 }, (_, i) => {
         const date = addDays(week, i);
         const d = byDate.get(date);
-        return { date, calls: d?.jobs?.length || 0, amount: Number(d?.payout || 0) };
+        return { date, jobs: d?.jobs || [], calls: d?.jobs?.length || 0, amount: Number(d?.payout || 0) };
       }),
     };
   }, [days, week, weekEnd, monthStart]);
 
-  // Finished jobs of the chosen week, newest day first.
-  const doneGroups = useMemo(() => {
-    const groups = new Map();
-    for (const j of jobs) {
-      if (j.status !== "CLOSED") continue;
-      const d = closedIST(j);
-      if (!d || d < week || d > weekEnd) continue;
-      if (!groups.has(d)) groups.set(d, []);
-      groups.get(d).push(j);
-    }
-    return [...groups.entries()].sort((a, b) => (a[0] < b[0] ? 1 : -1));
-  }, [jobs, week, weekEnd]);
+  // The app's own copy of each job, to put a customer name on a call and open it.
+  const jobById = useMemo(() => {
+    const m = new Map();
+    for (const j of jobs) { m.set(String(j.id), j); if (j.code) m.set(j.code, j); }
+    return m;
+  }, [jobs]);
+  const jobFor = (call) => jobById.get(String(call.ticket_id)) || jobById.get(call.ticket_number) || null;
 
   const isThisWeek = week === thisWeek;
   const canPrev = addDays(week, -7) >= rangeFrom;
@@ -216,20 +214,23 @@ export default function MyWork() {
         )}
       </Card>
 
-      {/* Day by day */}
+      {/* Day by day, every call under its date */}
       <SecH>Day by day</SecH>
-      <Card className="!py-2">
-        {perDay.map((d) => (
-          <div key={d.date} className={cx("flex items-center justify-between py-2 text-[15px]", d.date > today && "opacity-40")}>
-            <span className={cx("font-semibold", d.date === today ? "text-brand" : "text-strong")}>
+      {perDay.map((d) => (
+        <Card key={d.date} className={cx("mt-2.5 !py-2", d.date > today && "opacity-40")}>
+          <div className="flex items-center justify-between py-1.5 text-[15px]">
+            <span className={cx("font-bold", d.date === today ? "text-brand" : "text-strong")}>
               {fmt(d.date, { weekday: "short" })}, {shortDay(d.date)}{d.date === today ? " · Today" : ""}
             </span>
             <span className="tnum text-muted">
               {d.calls} call{d.calls === 1 ? "" : "s"} · <b className="font-bold text-strong">{rupeeAmt(d.amount)}</b>
             </span>
           </div>
-        ))}
-      </Card>
+          {d.jobs.map((c) => (
+            <CallRow key={c.ticket_id || c.ticket_number} call={c} job={jobFor(c)} onOpen={(job) => nav(`/job/${job.id}`)} />
+          ))}
+        </Card>
+      ))}
 
       {/* Whole month */}
       <SecH>{fmt(monthStart, { month: "long" })} so far</SecH>
@@ -244,21 +245,6 @@ export default function MyWork() {
         </div>
       </Card>
 
-      {/* Finished jobs of this week */}
-      <SecH>Done jobs · {weekLabel.toLowerCase()}</SecH>
-      {doneGroups.length === 0 && (
-        <div className="rounded-2xl bg-surface px-4 py-8 text-center text-sm font-medium text-subtle shadow-card">
-          No finished jobs in this week.
-        </div>
-      )}
-      {doneGroups.map(([date, items]) => (
-        <div key={date}>
-          <div className="mx-1 mb-1 mt-3 text-[13px] font-extrabold text-muted">
-            {date === today ? "Today" : `${fmt(date, { weekday: "short" })}, ${shortDay(date)}`}
-          </div>
-          {items.map((j) => <DoneRow key={j.id} job={j} onOpen={(job) => nav(`/job/${job.id}`)} />)}
-        </div>
-      ))}
       <div className="h-6" />
     </>
   );

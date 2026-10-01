@@ -188,7 +188,8 @@ const earnings = () => {
     const jobs = Array.from({ length: n }, (_, k) => {
       // Today's and yesterday's calls are mostly still waiting for a rating.
       const feedback = i < 2 && k % 2 === 0 ? "pending" : ["very_good", "average", "very_good", "bad", "average"][(i + k) % 5];
-      return { ticket_id: `d${i}-${k}`, ticket_number: `OG-${2900 - i * 5 - k}`, feedback, pending: feedback === "pending",
+      const customer_name = ["Meera Kulkarni", "Vikram Joshi", "Anil Bhosale", "Rekha Jadhav", "Sunil Pawar", "Asha More"][(i * 3 + k) % 6];
+      return { ticket_id: `d${i}-${k}`, customer_name, ticket_number: `OG-${2900 - i * 5 - k}`, feedback, pending: feedback === "pending",
         payout: RATES[feedback === "pending" ? "average" : feedback] };
     });
     days.push({ date: ist(new Date(Date.now() - i * 86400000)), jobs, jobs_count: n, payout: jobs.reduce((s, j) => s + j.payout, 0) });
