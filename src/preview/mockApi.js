@@ -263,6 +263,19 @@ export function installMockApi() {
     if (path === "/api/tech/earnings") return ok(earnings());
     if (path === "/api/tech/availability" || path === "/api/tech/push-token" || path === "/api/tech/location") return ok({ ok: true });
 
+    const revisit = path.match(/^\/api\/tech\/jobs\/([^/]+)\/revisit$/);
+    if (revisit) {
+      const orig = jobs.find((j) => j.id === revisit[1]);
+      if (!orig) return ok({ error: "Job not found" });
+      const job = {
+        ...orig, id: "rv" + Date.now().toString(36), code: "OG-NEW", status: "NEW", bucket: "today",
+        issue: `Revisit (${orig.code}): ${orig.issue}`, when: "Today, just now", rating: null,
+        assignedAt: new Date().toISOString(), revisit: true,
+        work: { added_by_tech: true, revisit_of: orig.id, call_type: "repeat" },
+      };
+      jobs.unshift(job);
+      return ok({ job });
+    }
     const step = path.match(/^\/api\/tech\/jobs\/([^/]+)\/step$/);
     if (step) {
       const job = find(step[1]);
