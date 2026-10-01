@@ -75,9 +75,9 @@ export const api = {
   // every app start so nothing about money is baked into the APK.
   config: () => req("/tech/config"),
   reviews: () => req("/tech/reviews"),
-  // No earnings call. The app does not show a technician what he has earned —
-  // the backend still computes payouts for the office (services/incentives.js),
-  // and the dashboard is where they are read.
+  // His closed calls and the per-call incentive for them, day by day (IST
+  // dates). Shown on My Work, a week at a time — incentive is paid weekly.
+  earnings: (from, to) => req(`/tech/earnings?from=${from}&to=${to}`),
   setOnline: (is_online) => req("/tech/availability", { method: "PATCH", body: { is_online } }),
   savePushToken: (token) => req("/tech/push-token", { method: "POST", body: { token } }),
   saveLocation: (lat, lng) => req("/tech/location", { method: "POST", body: { lat, lng } }),

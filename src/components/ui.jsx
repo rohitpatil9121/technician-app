@@ -460,6 +460,9 @@ export const BottomNav = () => {
       <NavLink to="/home" className={cls}>
         {({ isActive }) => (<><Pill active={isActive}><Icon.home width={22} height={22} aria-hidden="true" /></Pill> Home</>)}
       </NavLink>
+      <NavLink to="/work" className={cls}>
+        {({ isActive }) => (<><Pill active={isActive}><Icon.wallet width={21} height={21} aria-hidden="true" /></Pill> My Work</>)}
+      </NavLink>
       <NavLink to="/reviews" className={cls}>
         {({ isActive }) => (<><Pill active={isActive}><Icon.star width={21} height={21} aria-hidden="true" /></Pill> Reviews</>)}
       </NavLink>
