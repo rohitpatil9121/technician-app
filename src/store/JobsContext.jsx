@@ -14,7 +14,9 @@ const POLL_MS = 30000;
 const RESUME_DEBOUNCE_MS = 1500;
 
 const jobsSig = (list) =>
-  (list || []).map((j) => `${j.id}:${j.status}:${j.work?.tech_status || ""}`).join("|");
+  // revisit + assignedAt are in here so a list cached by an older build, which
+  // has neither, is replaced by the fresh one and Home can tag the red rows.
+  (list || []).map((j) => `${j.id}:${j.status}:${j.work?.tech_status || ""}:${j.revisit ? 1 : 0}:${j.assignedAt || ""}`).join("|");
 
 export function JobsProvider({ children }) {
   const [live, setLive] = useState(() => !!getToken());
