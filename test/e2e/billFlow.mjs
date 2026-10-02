@@ -28,7 +28,8 @@ const check = (ok, label, detail = "") => {
   console.log(`${ok ? "  OK  " : " FAIL "} ${label}${detail ? `   (${detail})` : ""}`);
 };
 
-async function run({ port, reject }) {
+async function run({ port, reject, charge = 250 }) {
+  const total = charge + 650;
   const server = spawn(process.execPath, ["fakeBackend.mjs", DIST, String(port)], {
     cwd: import.meta.dirname, stdio: ["ignore", "ignore", "pipe"],
     env: { ...process.env, REJECT_ESTIMATE: reject ? "1" : "" },
@@ -72,13 +73,21 @@ async function run({ port, reject }) {
     await tap("Continue");
     await page.waitForSelector("text=Make the Bill");
 
-    // Service ₹250 (the default) + one part at ₹650.
+    // The service charge is chosen from the office's amounts, never typed: the
+    // card holds no input and no +/- buttons, only the preset buttons.
+    const card = page.locator("text=Amount to collect").locator("xpath=ancestor::div[.//button][1]");
+    if (charge !== 250) {
+      check(await card.locator("input").count() === 0, "the service charge cannot be typed");
+      check(await card.getByRole("button", { name: /Increase|Decrease|^[+−-]$/ }).count() === 0, "and has no +/- buttons");
+      await card.getByRole("button", { name: `₹${charge}`, exact: true }).click();
+    }
+    // Service charge (₹250 unless chosen above) + one part at ₹650.
     await page.getByRole("button", { name: "Add Part", exact: true }).click();
     await page.getByRole("button", { name: "Add Kent Sediment filter" }).click();
     await page.getByRole("button", { name: "Done" }).click();
-    await page.waitForSelector("text=Collect ₹900");
+    await page.waitForSelector(`text=Collect ₹${total.toLocaleString("en-IN")}`);
     steps.length = 0;
-    await tap("Collect ₹900");
+    await tap(`Collect ₹${total.toLocaleString("en-IN")}`);
     await sleep(2500);
     const body = await page.locator("body").innerText();
     const actions = steps.map((s) => s.action);
@@ -92,9 +101,9 @@ async function run({ port, reject }) {
     } else {
       const est = steps.find((s) => s.action === "estimate")?.work || {};
       const done = steps.find((s) => s.action === "workdone")?.work || {};
-      check(est.service_charge === 250, "the estimate carries the service charge", String(est.service_charge));
+      check(est.service_charge === charge, "the estimate carries the service charge", String(est.service_charge));
       check(est.parts?.length === 1 && est.parts[0].price === 650, "and the part at its price", JSON.stringify(est.parts?.map((p) => [p.name, p.price])));
-      check(est.total === 900 && done.total === 900, "estimate and work-done agree on the total", `${est.total} / ${done.total}`);
+      check(est.total === total && done.total === total, "estimate and work-done agree on the total", `${est.total} / ${done.total}`);
       check(!/Bill not saved/.test(body), "no error on an accepted bill");
 
       // Take the money in cash and check the payment carries the same figure.
@@ -107,7 +116,7 @@ async function run({ port, reject }) {
       await yes.click();
       await sleep(2000);
       const pay = steps.find((s) => s.action === "payment")?.work || {};
-      check(pay.total === 900, "payment records the same ₹900 the bill showed", String(pay.total));
+      check(pay.total === total, `payment records the same ₹${total} the bill showed`, String(pay.total));
     }
   } catch (e) {
     check(false, `flow crashed (${reject ? "refused" : "accepted"} bill)`, e.message.split("\n")[0]);
@@ -122,6 +131,8 @@ console.log("\n=== 1. The server refuses the bill");
 await run({ port: 5601, reject: true });
 console.log("\n=== 2. The server accepts the bill");
 await run({ port: 5602, reject: false });
+console.log("\n=== 3. A ₹350 service charge picked from the buttons");
+await run({ port: 5603, reject: false, charge: 350 });
 
 console.log(`\n===== ${pass.length} passed, ${fail.length} failed =====`);
 fail.forEach((f) => console.log("  FAILED: " + f));
