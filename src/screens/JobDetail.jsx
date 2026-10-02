@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useJobs } from "../store/JobsContext.jsx";
-import { CALL_TYPES, SVC_STEP, billConfig, chargeTypes } from "../data/charges.js";
+import { CALL_TYPES, billConfig, chargeTypes } from "../data/charges.js";
 import { rupee, rupeeAmt } from "../lib/format.js";
 import { mediaUrl } from "../lib/api.js";
 import { callPhone, openMaps, openWhatsApp } from "../lib/contact.js";
@@ -918,12 +918,13 @@ function JobDetailInner({ job }) {
           <div className="flex items-center justify-between gap-3">
             <div>
               <div className="text-[16px] font-bold text-strong">Amount to collect</div>
-              <div className="mt-0.5 text-[12.5px] text-muted">Tap the number to type any amount</div>
+              <div className="mt-0.5 text-[12.5px] text-muted">Pick one of the amounts below</div>
             </div>
-            <PlusMinus value={serviceCharge} min={0} max={bill.max} step={SVC_STEP} wide
-              format={(v) => (v === 0 ? "Free" : rupeeAmt(v))}
-              onDelta={(d) => setServiceCharge((v) => Math.max(0, Math.min(bill.max, v + d)))}
-              onInput={setServiceCharge} />
+            {/* Shown, not typed (owner's call): the charge is one of the office's
+                amounts below, never a figure the technician makes up. */}
+            <div className="tnum shrink-0 rounded-full bg-sunken px-5 py-2.5 text-[17px] font-bold text-strong">
+              {serviceCharge === 0 ? "Free" : rupeeAmt(serviceCharge)}
+            </div>
           </div>
           <div className="mt-3 flex gap-2">
             {bill.presets.map((v) => {
