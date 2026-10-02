@@ -245,7 +245,7 @@ export function JobsProvider({ children }) {
       .catch(async (e) => {
         console.error("step:", e.message);
         await Promise.all([loadJobs({ background: true }), loadParts()]);
-        return { rejected: e.message || "The server did not accept this." };
+        return { error: e.message || "Could not save" };
       });
   }, [live, loadJobs, loadParts]);
 

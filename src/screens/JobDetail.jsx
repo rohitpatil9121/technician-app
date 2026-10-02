@@ -201,7 +201,6 @@ function JobDetailInner({ job }) {
   const [cancelReason, setCancelReason] = useState("");
   const [cancelNote, setCancelNote] = useState("");
   const [cancelErr, setCancelErr] = useState("");
-  // Why the server refused the bill, shown on the bill screen until it is fixed.
   const [billErr, setBillErr] = useState("");
   const [celebrate, setCelebrate] = useState(false);
 
@@ -472,9 +471,11 @@ function JobDetailInner({ job }) {
       call_type: callType, charge: callType, service_charge: serviceCharge,
       parts, total: estTotal, model_name: modelName.trim(), work_started: true,
     }, "estimate");
-    // No bill on the server means no money is taken against it. Stay here and
-    // say why, so the technician fixes the bill instead of collecting on it.
-    if (saved?.rejected) { setBillErr(saved.rejected); setBusy(false); return; }
+    /* The server refused the bill. Going on to Payment anyway is how
+       OG-021026-0007 happened: the total reached the server on its own, the
+       itemised bill did not, and the customer paid Rs. 3,800 against a Rs. 250
+       invoice. Stay on the bill and say why. */
+    if (saved?.error) { setBillErr(saved.error); setBusy(false); return; }
     /* Where the bill was written, for the office. Read now rather than taken
        from the live tracker, which is off whenever the app is backgrounded.
        Awaited on purpose — a fix takes a moment and the bill is worth waiting
@@ -571,11 +572,10 @@ function JobDetailInner({ job }) {
          status ends where it already was and the totals are recomputed. */
       setBillErr("");
       const saved = await advance("VERIFIED", { ...work, work_started: true }, "estimate");
-      if (saved?.rejected) { setBillErr(saved.rejected); setBusy(false); return; }
+      if (saved?.error) { setBillErr(saved.error); setBusy(false); return; }
       await advance("WORK_DONE", { total: estTotal, bill_location: await getPositionOnce() });
     } else {
-      const saved = await advance(st, work, st === "VERIFIED" ? "estimate" : undefined);
-      if (saved?.rejected) { setBillErr(saved.rejected); setBusy(false); return; }
+      await advance(st, work, st === "VERIFIED" ? "estimate" : undefined);
     }
     setBusy(false);
     goStep(null);
@@ -1039,10 +1039,10 @@ function JobDetailInner({ job }) {
             on the button below instead. */}
         {/* Says why the button below is dead. A disabled button with no reason is
             how the technician concludes the app is broken. */}
-        {billErr && (
+        {billErr && !badPrice && (
           <div role="alert" className="mt-3 flex items-start gap-2.5 rounded-2xl bg-danger-tint p-3.5 text-[14.5px] font-semibold text-danger-fg">
             <Icon.alert width={19} height={19} className="mt-0.5 shrink-0" />
-            <span>Bill not saved: {billErr}. Fix it and try again. Do not take payment until this bill saves.</span>
+            Bill not saved — {billErr}. Fix it and try again before collecting payment.
           </div>
         )}
         {badPrice && (
