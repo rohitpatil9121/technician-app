@@ -87,14 +87,33 @@ export function JobsProvider({ children }) {
     } catch { /* the next poll tries again */ }
   }, []);
 
+  /* The parts catalogue, as the office has it now.
+
+     It was fetched once on boot and once on login, and never again. The app
+     stays open for days on a technician's phone, so a part the office added
+     that morning (OASIS ALL KIT, 2 Oct) was simply not in the Add Part list
+     until somebody force-closed the app — and a price changed in Inventory kept
+     its old figure the same way. It now refreshes with everything else: on
+     resume and on the slower poll tick. */
+  const loadParts = useCallback(async () => {
+    if (!getToken()) return;
+    try {
+      const { parts: p } = await api.parts();
+      if (p?.length) {
+        cacheParts(p);
+        setParts((prev) => (JSON.stringify(prev) === JSON.stringify(p) ? prev : p));
+      }
+    } catch { /* offline: the cached catalogue stays */ }
+  }, []);
+
   useEffect(() => {
     if (!getToken()) return;
     loadJobs();
     loadReviews();
     ensureUser();
-    api.parts().then(({ parts: p }) => { if (p?.length) { setParts(p); cacheParts(p); } }).catch(() => {});
+    loadParts();
     api.config().then(({ config: c }) => { if (c) { setConfig(c); cacheConfig(c); } }).catch(() => {});
-  }, [loadJobs, loadReviews, ensureUser]);
+  }, [loadJobs, loadReviews, ensureUser, loadParts]);
 
   useEffect(() => {
     if (!loggedIn) return;
@@ -104,6 +123,7 @@ export function JobsProvider({ children }) {
     const refreshAll = () => {
       refreshJobs();
       loadReviews();
+      loadParts();
     };
     const scheduleResumeRefresh = () => {
       clearTimeout(resumeTimer);
@@ -114,7 +134,7 @@ export function JobsProvider({ children }) {
       refreshJobs();
       ensureUser();
       reviewTick += 1;
-      if (reviewTick % 2 === 0) loadReviews();
+      if (reviewTick % 2 === 0) { loadReviews(); loadParts(); }
     }, POLL_MS);
 
     const onVisible = () => {
@@ -135,7 +155,7 @@ export function JobsProvider({ children }) {
       window.removeEventListener("focus", scheduleResumeRefresh);
       appSub?.remove?.();
     };
-  }, [loggedIn, loadJobs, loadReviews, ensureUser]);
+  }, [loggedIn, loadJobs, loadReviews, ensureUser, loadParts]);
 
   const startLive = useCallback(async (token, u) => {
     setToken(token);
@@ -144,11 +164,11 @@ export function JobsProvider({ children }) {
     if (u) setUser(u);
     await loadJobs();
     await loadReviews();
-    api.parts().then(({ parts: p }) => { if (p?.length) { setParts(p); cacheParts(p); } }).catch(() => {});
+    loadParts();
     // Same as on app start: the first bill after a fresh login must already
     // carry the office's charges, not the shipped defaults.
     api.config().then(({ config: c }) => { if (c) { setConfig(c); cacheConfig(c); } }).catch(() => {});
-  }, [loadJobs, loadReviews]);
+  }, [loadJobs, loadReviews, loadParts]);
 
   const logout = useCallback(() => {
     setToken(null);
