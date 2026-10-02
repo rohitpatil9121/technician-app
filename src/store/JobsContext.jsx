@@ -235,9 +235,19 @@ export function JobsProvider({ children }) {
     // this and the arrival-OTP request; letting them overlap raced two writes
     // to the same job and the OTP lost.
     return queuedStep(id, step, patch.work || {})
-      .then((res) => { if (res?.job) setJobs((prev) => prev.map((j) => (j.id === id ? res.job : j))); })
-      .catch((e) => { console.error("step:", e.message); loadJobs({ background: true }); });
-  }, [live, loadJobs]);
+      .then((res) => { if (res?.job) setJobs((prev) => prev.map((j) => (j.id === id ? res.job : j))); return res; })
+      /* The server refused this step. It used to be logged and forgotten, and the
+         screen carried on as if it had saved: on 2 Oct a bill was refused, the
+         technician was walked on to Payment anyway, and the customer got a tax
+         invoice for the bare service charge. The caller is now told, after the
+         job is put back to what the server actually holds, and the catalogue is
+         re-read because a stale price is the usual reason a bill is refused. */
+      .catch(async (e) => {
+        console.error("step:", e.message);
+        await Promise.all([loadJobs({ background: true }), loadParts()]);
+        return { rejected: e.message || "The server did not accept this." };
+      });
+  }, [live, loadJobs, loadParts]);
 
   const setOnline = useCallback((v) => {
     setOnlineState((prev) => {
