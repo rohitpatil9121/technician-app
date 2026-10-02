@@ -60,9 +60,14 @@ const server = createServer(async (req, res) => {
     if (path === "/api/tech/reviews") return send(res, 200, { reviews: { average: 4.8, count: 12, items: [] } });
 
     if (/\/step$/.test(path)) {
+      // REJECT_ESTIMATE=1: refuse the bill the way the real server does when a
+      // part is priced outside its limits (techJobs.runStep's estimate guard).
+      if (process.env.REJECT_ESTIMATE && body.action === "estimate") {
+        return send(res, 400, { error: "Kent Sediment filter: price ₹700 is above MRP ₹650" });
+      }
       // Mirror the real step machine loosely: the action becomes the status.
       const map = { accept: "ACCEPTED", enroute: "ON_THE_WAY", arrive: "ARRIVED", diagnose: "DIAGNOSED",
-        estimate: "ESTIMATE_SENT", approve: "VERIFIED", workdone: "WORK_DONE", payment: "PAID", close: "CLOSED" };
+        estimate: "VERIFIED", approve: "VERIFIED", workdone: "WORK_DONE", payment: "PAID", close: "CLOSED" };
       j.status = map[body.action] || j.status;
       j.work = { ...j.work, ...(body.work || {}), tech_status: j.status };
       return send(res, 200, { job: j });
