@@ -216,7 +216,10 @@ export function JobsProvider({ children }) {
     // to the same job and the OTP lost.
     return queuedStep(id, step, patch.work || {})
       .then((res) => { if (res?.job) setJobs((prev) => prev.map((j) => (j.id === id ? res.job : j))); })
-      .catch((e) => { console.error("step:", e.message); loadJobs({ background: true }); });
+      // Resolved with the reason rather than thrown, so the many callers that
+      // just await the write keep working — and the bill can refuse to move on
+      // to Payment when the server turned it down.
+      .catch((e) => { console.error("step:", e.message); loadJobs({ background: true }); return { error: e.message || "Could not save" }; });
   }, [live, loadJobs]);
 
   const setOnline = useCallback((v) => {

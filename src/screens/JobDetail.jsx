@@ -201,6 +201,7 @@ function JobDetailInner({ job }) {
   const [cancelReason, setCancelReason] = useState("");
   const [cancelNote, setCancelNote] = useState("");
   const [cancelErr, setCancelErr] = useState("");
+  const [billErr, setBillErr] = useState("");
   const [celebrate, setCelebrate] = useState(false);
 
   const draftRef = useRef({});
@@ -465,11 +466,16 @@ function JobDetailInner({ job }) {
     const now = Date.now();
     if (now - stepLock.current < STEP_GAP_MS) return;
     stepLock.current = now;
-    setBusy(true);
-    await advance("VERIFIED", {
+    setBusy(true); setBillErr("");
+    const saved = await advance("VERIFIED", {
       call_type: callType, charge: callType, service_charge: serviceCharge,
       parts, total: estTotal, model_name: modelName.trim(), work_started: true,
     }, "estimate");
+    /* The server refused the bill. Going on to Payment anyway is how
+       OG-021026-0007 happened: the total reached the server on its own, the
+       itemised bill did not, and the customer paid Rs. 3,800 against a Rs. 250
+       invoice. Stay on the bill and say why. */
+    if (saved?.error) { setBillErr(saved.error); setBusy(false); return; }
     /* Where the bill was written, for the office. Read now rather than taken
        from the live tracker, which is off whenever the app is backgrounded.
        Awaited on purpose — a fix takes a moment and the bill is worth waiting
@@ -564,7 +570,9 @@ function JobDetailInner({ job }) {
 
          Both writes carry the same corrected work, so replaying them is safe:
          status ends where it already was and the totals are recomputed. */
-      await advance("VERIFIED", { ...work, work_started: true }, "estimate");
+      setBillErr("");
+      const saved = await advance("VERIFIED", { ...work, work_started: true }, "estimate");
+      if (saved?.error) { setBillErr(saved.error); setBusy(false); return; }
       await advance("WORK_DONE", { total: estTotal, bill_location: await getPositionOnce() });
     } else {
       await advance(st, work, st === "VERIFIED" ? "estimate" : undefined);
@@ -1031,6 +1039,12 @@ function JobDetailInner({ job }) {
             on the button below instead. */}
         {/* Says why the button below is dead. A disabled button with no reason is
             how the technician concludes the app is broken. */}
+        {billErr && !badPrice && (
+          <div role="alert" className="mt-3 flex items-start gap-2.5 rounded-2xl bg-danger-tint p-3.5 text-[14.5px] font-semibold text-danger-fg">
+            <Icon.alert width={19} height={19} className="mt-0.5 shrink-0" />
+            Bill not saved — {billErr}. Fix it and try again before collecting payment.
+          </div>
+        )}
         {badPrice && (
           <div role="alert" className="mt-3 flex items-start gap-2.5 rounded-2xl bg-danger-tint p-3.5 text-[14.5px] font-semibold text-danger-fg">
             <Icon.alert width={19} height={19} className="mt-0.5 shrink-0" />

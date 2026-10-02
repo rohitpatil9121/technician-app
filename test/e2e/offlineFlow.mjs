@@ -48,7 +48,10 @@ server.stderr.on("data", (d) => process.stderr.write(`[srv!] ${d}`));
 await sleep(700);
 
 // Drives the installed Edge by default; E2E_BROWSER=chrome on a machine without it.
-const browser = await chromium.launch({ channel: process.env.E2E_BROWSER || "msedge" });
+// E2E_CHROMIUM=/path/to/chrome runs a bundled Chromium instead (CI, Linux).
+const browser = await chromium.launch(process.env.E2E_CHROMIUM
+  ? { executablePath: process.env.E2E_CHROMIUM }
+  : { channel: process.env.E2E_BROWSER || "msedge" });
 const ctx = await browser.newContext({ viewport: { width: 412, height: 915 }, isMobile: true, hasTouch: true });
 
 let offline = false;                       // the radio, as far as the app can tell
