@@ -17,6 +17,7 @@ const JobDetail = lazy(() => import("./screens/JobDetail.jsx"));
 const NewCall = lazy(() => import("./screens/NewCall.jsx"));
 const Reviews = lazy(() => import("./screens/Reviews.jsx"));
 const MyWork = lazy(() => import("./screens/MyWork.jsx"));
+const MyStock = lazy(() => import("./screens/MyStock.jsx"));
 // Design harness for the Home redesign — dev only. The ternary (rather than a
 // bare lazy()) is what lets Rollup drop the dynamic import from production
 // builds; calling lazy() at module scope keeps the chunk alive regardless of
@@ -91,6 +92,7 @@ export default function App() {
       <Route path="/home" element={<Tabbed><Home /></Tabbed>} />
       <Route path="/reviews" element={<Tabbed><Suspense fallback={<ScreenLoader />}><Reviews /></Suspense></Tabbed>} />
       <Route path="/work" element={<Tabbed><Suspense fallback={<ScreenLoader />}><MyWork /></Suspense></Tabbed>} />
+      <Route path="/stock" element={<Tabbed><Suspense fallback={<ScreenLoader />}><MyStock /></Suspense></Tabbed>} />
       <Route path="/new-call" element={<Suspense fallback={<ScreenLoader />}><NewCall /></Suspense>} />
       <Route path="/job/:id" element={<Suspense fallback={<ScreenLoader />}><JobDetail /></Suspense>} />
       <Route path="*" element={<Navigate to="/home" replace />} />

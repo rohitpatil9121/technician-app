@@ -80,6 +80,8 @@ export const api = {
   // His closed calls and the per-call incentive for them, day by day (IST
   // dates). Shown on My Work, a week at a time — incentive is paid weekly.
   earnings: (from, to) => req(`/tech/earnings?from=${from}&to=${to}`),
+  // Parts the office has issued to him and how many he still holds (My Stock).
+  myStock: () => req("/tech/stock"),
   setOnline: (is_online) => req("/tech/availability", { method: "PATCH", body: { is_online } }),
   savePushToken: (token) => req("/tech/push-token", { method: "POST", body: { token } }),
   saveLocation: (lat, lng) => req("/tech/location", { method: "POST", body: { lat, lng } }),

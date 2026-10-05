@@ -261,6 +261,15 @@ export function installMockApi() {
     } });
     if (path === "/api/tech/reviews") return ok({ reviews: REVIEWS });
     if (path === "/api/tech/earnings") return ok(earnings());
+    if (path === "/api/tech/stock") return ok({
+      since: new Date(Date.now() - 3 * 86400000).toISOString(), in_hand: 9,
+      items: [
+        { id: "s1", name: "MEMBRANE 75 GPD", unit: "pcs", issued: 3, returned: 0, used: 1, in_hand: 2 },
+        { id: "s2", name: "NOZAL 1/4", unit: "pcs", issued: 10, returned: 2, used: 4, in_hand: 4 },
+        { id: "s3", name: "PP", unit: "pcs", issued: 6, returned: 0, used: 3, in_hand: 3 },
+        { id: "s4", name: "SV 24V", unit: "pcs", issued: 2, returned: 0, used: 2, in_hand: 0 },
+      ],
+    });
     if (path === "/api/tech/availability" || path === "/api/tech/push-token" || path === "/api/tech/location") return ok({ ok: true });
 
     const revisit = path.match(/^\/api\/tech\/jobs\/([^/]+)\/revisit$/);
