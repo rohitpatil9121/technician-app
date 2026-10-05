@@ -448,8 +448,13 @@ function JobDetailInner({ job }) {
     // optimistically, so anything rendered between them is a screen the
     // technician never asked for and can act on by mistake.
     setCelebrate(true);
-    await advance("PAID", { payments, total: billTotal, mode, split });
-    await advance("CLOSED", { nextService: "6 months" });
+    const paid = await advance("PAID", { payments, total: billTotal, mode, split });
+    /* The payment did not save. Closing anyway is how OG-051026-0011 ended up
+       Service Done with an amount and no bill — the invoice is raised by the
+       payment write. Back to Payment, with the reason, so he can take it again. */
+    if (paid?.error) { setCelebrate(false); setOv("payFailed:" + paid.error); setBusy(false); return; }
+    const closed = await advance("CLOSED", { nextService: "6 months" });
+    if (closed?.error) { setCelebrate(false); setOv("payFailed:" + closed.error); }
     setBusy(false);
   };
   const upiRemainder = Math.max(0, billTotal - Math.min(cashPart, billTotal));
@@ -1334,6 +1339,13 @@ function JobDetailInner({ job }) {
             );
           })}
         </MSheet>
+      )}
+      {ov?.startsWith?.("payFailed:") && (
+        <MDialog title="Payment not saved" onClose={() => setOv(null)}
+          icon={<Icon.alert width={24} height={24} className="text-danger-fg" />} iconClass="bg-danger-tint"
+          actions={<MDialogBtn bold onClick={() => setOv(null)}>OK</MDialogBtn>}>
+          {ov.slice("payFailed:".length)}. The job is still open — check your signal and press the payment button again. Do not take the money twice.
+        </MDialog>
       )}
       {ov === "cashConfirm" && (
         <MDialog title={`Got ${rupeeAmt(billTotal)} in cash?`} onClose={() => setOv(null)}

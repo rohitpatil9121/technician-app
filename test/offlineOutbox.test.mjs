@@ -203,15 +203,34 @@ test("a server blip keeps the item and stops the drain, so order survives", asyn
 test("a write the server refuses outright is dropped, not left blocking the queue", async () => {
   await offline(async () => {
     await sync.queuedStep("job-1", "arrive", {});
-    await sync.queuedStep("job-1", "payment", {});
+    await sync.queuedStep("job-2", "payment", {});
   });
   apiCalls.length = 0;
   let n = 0;
   nextResult = () => { if (++n === 1) throw serverError(400); return { ok: true }; };
   await sync.flush();
 
-  assert.equal(queue.length, 0, "the bad one goes, the good one still gets through");
+  assert.equal(queue.length, 0, "the bad one goes, the other job's write still gets through");
   assert.equal(apiCalls.length, 2);
+});
+
+test("a refused step takes that job's later steps with it", async () => {
+  // OG-041026-0003: the bill written offline was refused when it went out, and
+  // the work-done, payment and close queued behind it all landed — a paid,
+  // closed job with no bill. The rest of that job must not be sent.
+  await offline(async () => {
+    await sync.queuedStep("job-1", "estimate", {});
+    await sync.queuedStep("job-1", "payment", {});
+    await sync.queuedStep("job-1", "close", {});
+    await sync.queuedStep("job-2", "arrive", {});
+  });
+  apiCalls.length = 0;
+  let n = 0;
+  nextResult = () => { if (++n === 1) throw serverError(400); return { ok: true }; };
+  await sync.flush();
+
+  assert.equal(queue.length, 0);
+  assert.deepEqual(apiCalls.map((c) => `${c.jobId}:${c.action}`), ["job-1:estimate", "job-2:arrive"]);
 });
 
 test("the UI is handed the updated job before the item leaves the queue", async () => {

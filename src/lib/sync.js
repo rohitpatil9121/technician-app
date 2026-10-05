@@ -41,7 +41,10 @@ export async function flush() {
   flushing = true;
   try {
     const items = await all();
+    // Jobs with a step the server refused during this pass. See the drop below.
+    const refused = new Set();
     for (const item of items) {
+      if (item.kind === "step" && refused.has(item.jobId)) { await remove(item.id); continue; }
       try {
         const res = await send(item);
         // The photo is now at a URL, and we are holding the only other copy of
@@ -68,6 +71,16 @@ export async function flush() {
         // Retrying forever would block every later item, so drop it and move on.
         console.error(`outbox drop ${item.kind} for ${item.jobId}:`, e.message);
         await remove(item.id);
+        /* A refused STEP takes the job's later steps with it. Sending them on
+           is how OG-041026-0003 was paid and closed with no bill: the bill
+           written in a basement was refused when it finally went out, and the
+           work-done, payment and close queued behind it all landed. The job is
+           put back to what the server holds, so the technician finds it open at
+           the step that failed and does it again. */
+        if (item.kind === "step" && item.jobId) {
+          refused.add(item.jobId);
+          try { const { job } = await api.job(item.jobId); if (job && onJob) onJob(job); } catch { /* the next poll shows it */ }
+        }
       }
     }
   } finally {
