@@ -26,6 +26,9 @@ import { stepIndexForStatus, STEPS } from "../lib/workflow.js";
 /* Same options the dashboard offers (frontend/src/components/CancelModal.jsx).
    Kept in step by hand — the two apps are separate builds — so that cancellation
    reasons stay comparable across the field and the office. */
+// Why a bill is small — the owner's choices on the Close call page; "Other" is typed.
+const LOW_BILL_REASONS = ["Warranty call", "Installation", "Revisit"];
+
 /* Purifier brands the technician picks from on the Details screen (owner,
    6 Oct 2026). "OTHER" asks him to type the name. What is saved is the brand
    itself — the picked one, or what he typed. */
@@ -466,23 +469,37 @@ function JobDetailInner({ job }) {
 
   /* Payment finish: record PAID then CLOSE in one go (mockup has no separate
      close tap). Chained awaits — the outbox preserves order offline. */
-  /* A small bill needs a reason before the call closes (owner, 6 Oct 2026).
+  /* Closing the call (owner, 6 Oct 2026).
 
-     Anything under the limit — a bare visit charge, a free or warranty call —
-     is asked "why so little?" once the money is confirmed and before the job
-     is finished. The reason goes to the office with the payment. The answer is
-     asked for here rather than on the bill, because this is the last thing
-     between him and Job Complete: it cannot be skipped by going another way. */
+     Once the money is confirmed, one last page stands between him and Job
+     Complete. It always carries his remark for the office, and for a small bill
+     — under the limit: a bare visit charge, a free or warranty call — it asks
+     why, which must be answered. The owner's reasons are offered as choices;
+     "Other" asks him to type it. Both go to the office with the payment. This is
+     the last thing before the job is finished, so it cannot be gone around. */
   const lowBillLimit = Number(config?.low_bill_limit) > 0 ? Number(config.low_bill_limit) : 500;
-  const [lowReason, setLowReason] = useState("");
+  const lowBill = billTotal < lowBillLimit;
+  const [lowPick, setLowPick] = useState("");
+  const [lowOther, setLowOther] = useState("");
+  const [closeRemark, setCloseRemark] = useState("");
+  const lowReason = lowPick === "Other" ? lowOther.trim() : lowPick;
   const heldPayment = useRef(null);
-  const finishPayment = async (payments, mode, split, reason) => {
-    if (billTotal < lowBillLimit && !reason) {
-      heldPayment.current = { payments, mode, split };
-      setLowReason(w.low_bill_reason || "");
-      setOv("lowBill");
-      return;
-    }
+  const askToClose = (payments, mode, split) => {
+    heldPayment.current = { payments, mode, split };
+    // The call type usually is the reason, so it is picked for him to confirm.
+    setLowPick(w.low_bill_reason && !LOW_BILL_REASONS.includes(w.low_bill_reason) ? "Other"
+      : w.low_bill_reason || { warranty: "Warranty call", installation: "Installation", repeat: "Revisit" }[w.call_type ?? callType] || "");
+    setLowOther(w.low_bill_reason && !LOW_BILL_REASONS.includes(w.low_bill_reason) ? w.low_bill_reason : "");
+    setCloseRemark(w.remark || "");
+    setOv("closeCall");
+  };
+  const closeCall = () => {
+    const h = heldPayment.current;
+    if (h) finishPayment(h.payments, h.mode, h.split, { reason: lowBill ? lowReason : "", remark: closeRemark.trim() });
+  };
+  const finishPayment = async (payments, mode, split, closing) => {
+    if (!closing) { askToClose(payments, mode, split); return; }
+    const { reason, remark } = closing;
     setOv(null); setBusy(true);
     // Land on the celebration first, then write. See the note above the
     // `if (celebrate)` screen: the two writes below flip the job's status
@@ -496,6 +513,7 @@ function JobDetailInner({ job }) {
     const paid = await advance("PAID", {
       payments, total: billTotal, mode, split, ...ref, payment_pending: null,
       ...(reason ? { low_bill_reason: reason } : {}),
+      ...(remark ? { remark, remark_at: new Date().toISOString() } : {}),
     });
     /* The payment did not save. Closing anyway is how OG-051026-0011 ended up
        Service Done with an amount and no bill — the invoice is raised by the
@@ -1457,23 +1475,39 @@ function JobDetailInner({ job }) {
           {ov.slice("payFailed:".length)}. The job is still open — check your signal and press the payment button again. Do not take the money twice.
         </MDialog>
       )}
-      {ov === "lowBill" && (
-        <MDialog title={`Why is the bill only ${rupeeAmt(billTotal)}?`} onClose={() => setOv(null)}
-          icon={<Icon.alert width={24} height={24} className="text-warn-fg" />} iconClass="bg-warn-tint"
-          actions={
-            <>
-              <MDialogBtn onClick={() => setOv(null)}>Back</MDialogBtn>
-              <MDialogBtn bold disabled={lowReason.trim().length < 5}
-                onClick={() => { const h = heldPayment.current; if (h) finishPayment(h.payments, h.mode, h.split, lowReason.trim()); }}>
-                Finish job
-              </MDialogBtn>
-            </>
+      {ov === "closeCall" && (
+        <MSheet title="Close call" onClose={() => setOv(null)}
+          footer={
+            <PrimaryButton className="!bg-ok" disabled={busy || (lowBill && lowReason.length < 3)} loading={busy} onClick={closeCall}>
+              <Icon.checkCircle width={20} height={20} /> Finish job · {rupeeAmt(billTotal)}
+            </PrimaryButton>
           }>
-          <div>A bill under {rupeeAmt(lowBillLimit)} needs a reason for the office.</div>
-          <textarea rows={3} autoFocus maxLength={200} value={lowReason} onChange={(e) => setLowReason(e.target.value)}
-            placeholder="e.g. Only cleaning done, no part needed"
-            className={cx(input, "mt-3 w-full resize-none py-3 text-[16px] leading-relaxed")} />
-        </MDialog>
+          {lowBill && (
+            <Card className="mb-3">
+              <FLabel icon={Icon.alert} must>Reason</FLabel>
+              <div className="-mt-1 mb-2.5 text-sm text-muted">The bill is under {rupeeAmt(lowBillLimit)}. Why?</div>
+              <div className="flex flex-wrap gap-2">
+                {LOW_BILL_REASONS.concat("Other").map((r) => (
+                  <button key={r} type="button" aria-pressed={lowPick === r} onClick={() => setLowPick(r)}
+                    className={cx(
+                      "min-h-[44px] rounded-full border px-4 text-[14.5px] font-semibold transition",
+                      lowPick === r ? "border-transparent bg-brand text-white" : "border-hair bg-transparent text-strong"
+                    )}>{r}</button>
+                ))}
+              </div>
+              {lowPick === "Other" && (
+                <input className={cx(input, "mt-3")} autoFocus maxLength={120} placeholder="Type the reason"
+                  value={lowOther} onChange={(e) => setLowOther(e.target.value)} />
+              )}
+            </Card>
+          )}
+          <Card className="mb-3">
+            <FLabel icon={Icon.person}>Your remark for office</FLabel>
+            <textarea rows={3} maxLength={1000} value={closeRemark} onChange={(e) => setCloseRemark(e.target.value)}
+              placeholder="Anything the office should know about this customer or machine"
+              className={cx(input, "min-h-[88px] w-full resize-none py-3 leading-relaxed")} />
+          </Card>
+        </MSheet>
       )}
       {ov === "pendingConfirm" && (
         <MDialog title="Mark payment pending?" onClose={() => setOv(null)}
