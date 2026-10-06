@@ -15,6 +15,7 @@ import { takePendingPhoto, onPendingPhoto } from "../lib/photoRestore.js";
 import { queuedPhoto, queuedCancel, onOutboxChange } from "../lib/sync.js";
 import { pendingPhotos } from "../lib/outbox.js";
 import UpiQr from "../components/UpiQr.jsx";
+import RemarkCard from "../components/RemarkCard.jsx";
 import {
   Icon, IconChip, Card, FLabel, PrimaryButton, GhostButton, MDialog, MDialogBtn, MSheet, PlusMinus,
   input, cx, Skeleton, JobPhoto,
@@ -686,6 +687,8 @@ function JobDetailInner({ job }) {
             <Row l="Next service" r={w.nextService || "6 months"} muted />
           </Card>
 
+          <RemarkCard job={job} />
+
           {uploadedPhotos.length > 0 && (
             <>
               <SecH>Photos & proof</SecH>
@@ -780,6 +783,7 @@ function JobDetailInner({ job }) {
             <div className="whitespace-pre-wrap text-[16px] font-semibold leading-relaxed text-strong">{job.notes}</div>
           </div>
         )}
+        <RemarkCard job={job} />
         <Card className="mt-3">
           <FLabel icon={Icon.drop}>Purifier Details</FLabel>
           <Row l="Model" r={job.model || "—"} muted />

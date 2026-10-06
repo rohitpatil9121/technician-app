@@ -32,6 +32,7 @@ async function send(item) {
   if (kind === "verifyArrival") return api.verifyArrival(jobId, payload.code, clientId);
   if (kind === "cancel") return api.cancelJob(jobId, payload.reason, clientId);
   if (kind === "newCall") return api.addCall(payload.call, clientId);
+  if (kind === "remark") return api.remark(jobId, payload.remark, clientId);
   throw new Error("unknown outbox kind: " + kind);
 }
 
@@ -141,6 +142,11 @@ export const queuedCancel = (jobId, reason) =>
    worst, and losing it means losing the job, not just delaying a status. */
 export const queuedNewCall = (call) =>
   tryOrQueue("newCall", null, { call }, (cid) => api.addCall(call, cid));
+
+/* His remark for the office. Usually written at the end of a visit, on the way
+   out of the building — as likely to be offline as any other write. */
+export const queuedRemark = (jobId, remark) =>
+  tryOrQueue("remark", jobId, { remark }, (cid) => api.remark(jobId, remark, cid));
 
 /** Wire the triggers that drain the queue. Called once at app start. */
 export function startSync() {

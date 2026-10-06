@@ -72,6 +72,8 @@ export const api = {
   addCall: (body, client_id) => req("/tech/calls", { method: "POST", body: { ...body, client_id } }),
   // Customer of a finished job wants him back: opens a new call marked Revisit.
   revisit: (id) => req(`/tech/jobs/${id}/revisit`, { method: "POST" }),
+  // His own remark on the job, for the office to read.
+  remark: (id, remark, client_id) => req(`/tech/jobs/${id}/remark`, { method: "POST", body: { remark, client_id } }),
   parts: () => req("/tech/parts"),
   // Charges, quick-pick amounts and the UPI id — set on the dashboard, read on
   // every app start so nothing about money is baked into the APK.

@@ -261,6 +261,12 @@ export function installMockApi() {
     } });
     if (path === "/api/tech/reviews") return ok({ reviews: REVIEWS });
     if (path === "/api/tech/earnings") return ok(earnings());
+    const remark = path.match(/^\/api\/tech\/jobs\/([^/]+)\/remark$/);
+    if (remark) {
+      const j = find(remark[1]);
+      if (j) j.work = { ...(j.work || {}), remark: body.remark || null };
+      return ok({ job: j });
+    }
     if (path === "/api/tech/stock") return ok({
       since: new Date(Date.now() - 3 * 86400000).toISOString(), in_hand: 9,
       items: [
