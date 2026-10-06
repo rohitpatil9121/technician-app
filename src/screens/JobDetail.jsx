@@ -188,6 +188,10 @@ function JobDetailInner({ job }) {
   const [callTypeNote, setCallTypeNote] = useState(draft?.callTypeNote ?? w.call_type_note ?? "");
   const needsTypeNote = callType === "other" && !callTypeNote.trim();
   const typeNote = callType === "other" ? { call_type_note: callTypeNote.trim() } : { call_type_note: null };
+  // The two remarks of the Close screen — declared up here with the rest of the
+  // editable state because the draft below keeps them across a WebView reload.
+  const [closeRemark, setCloseRemark] = useState(draft?.closeRemark ?? "");
+  const [customerRemark, setCustomerRemark] = useState(draft?.customerRemark ?? "");
   const [brand, setBrand] = useState(draft?.brand ?? brandPick(w.brand));
   const [brandOther, setBrandOther] = useState(draft?.brandOther ?? brandTyped(w.brand));
   // The brand as it is saved: the one picked, or the name typed for OTHER.
@@ -231,7 +235,7 @@ function JobDetailInner({ job }) {
   const [celebrate, setCelebrate] = useState(false);
 
   const draftRef = useRef({});
-  draftRef.current = { callType, serviceCharge, parts, modelName, cashPart, brand, brandOther, callTypeNote };
+  draftRef.current = { callType, serviceCharge, parts, modelName, cashPart, brand, brandOther, callTypeNote, closeRemark, customerRemark };
 
   /* A part with an office-fixed price is billed at exactly that price. Parts
      come onto the bill from three places — the picker, a saved bill and a
@@ -266,6 +270,7 @@ function JobDetailInner({ job }) {
     pinRoute(`/job/${job.id}`);
     applyJobDraft(loadJobDraft(job.id), {
       setCallType, setServiceCharge, setParts, setModelName, setCashPart, setBrand, setBrandOther, setCallTypeNote,
+      setCloseRemark, setCustomerRemark,
     });
     acknowledgeJobResume();
   }, [job.id]);
@@ -285,7 +290,7 @@ function JobDetailInner({ job }) {
   useEffect(() => {
     const t = setTimeout(() => saveJobDraft(job.id, draftRef.current), 150);
     return () => clearTimeout(t);
-  }, [job.id, callType, serviceCharge, parts, modelName, cashPart, brand, brandOther, callTypeNote]);
+  }, [job.id, callType, serviceCharge, parts, modelName, cashPart, brand, brandOther, callTypeNote, closeRemark, customerRemark]);
 
   // Android can destroy the WebView while the camera is open — replay the shot.
   // It is offered for confirmation exactly like a shot taken in-session, on the
@@ -467,61 +472,54 @@ function JobDetailInner({ job }) {
   const uploadedPhotos = w.tech_photos || [];
   const techPhotos = [...uploadedPhotos, ...queuedPhotos];
 
-  /* Payment finish: record PAID then CLOSE in one go (mockup has no separate
-     close tap). Chained awaits — the outbox preserves order offline. */
-  /* Closing the call (owner, 6 Oct 2026).
+  /* Taking the money and closing the call are two steps (owner, 7 Oct 2026).
 
-     Once the money is confirmed, one last page stands between him and Job
-     Complete. It always carries his remark for the office, and for a small bill
-     — under the limit: a bare visit charge, a free or warranty call — it asks
-     why, which must be answered. The owner's reasons are offered as choices;
-     "Other" asks him to type it. Both go to the office with the payment. This is
-     the last thing before the job is finished, so it cannot be gone around. */
-  const lowBillLimit = Number(config?.low_bill_limit) > 0 ? Number(config.low_bill_limit) : 500;
-  const lowBill = billTotal < lowBillLimit;
-  const [lowPick, setLowPick] = useState("");
-  const [lowOther, setLowOther] = useState("");
-  const [closeRemark, setCloseRemark] = useState("");
-  const lowReason = lowPick === "Other" ? lowOther.trim() : lowPick;
-  const heldPayment = useRef(null);
-  const askToClose = (payments, mode, split) => {
-    heldPayment.current = { payments, mode, split };
-    // The call type usually is the reason, so it is picked for him to confirm.
-    setLowPick(w.low_bill_reason && !LOW_BILL_REASONS.includes(w.low_bill_reason) ? "Other"
-      : w.low_bill_reason || { warranty: "Warranty call", installation: "Installation", repeat: "Revisit" }[w.call_type ?? callType] || "");
-    setLowOther(w.low_bill_reason && !LOW_BILL_REASONS.includes(w.low_bill_reason) ? w.low_bill_reason : "");
-    setCloseRemark(w.remark || "");
-    setOv("closeCall");
-  };
-  const closeCall = () => {
-    const h = heldPayment.current;
-    if (h) finishPayment(h.payments, h.mode, h.split, { reason: lowBill ? lowReason : "", remark: closeRemark.trim() });
-  };
-  const finishPayment = async (payments, mode, split, closing) => {
-    if (!closing) { askToClose(payments, mode, split); return; }
-    const { reason, remark } = closing;
+     Confirming the payment records it — that is what raises the bill — and the
+     job moves to its last milestone, Close. There the technician writes his
+     remark for the customer (it is sent to them on WhatsApp), notes what the
+     customer said, gives the reason when the bill is under the limit, and
+     presses Service Done. A job left at Close is paid and billed; it simply
+     waits in his list, on that screen, until he finishes it. */
+  const finishPayment = async (payments, mode, split) => {
     setOv(null); setBusy(true);
-    // Land on the celebration first, then write. See the note above the
-    // `if (celebrate)` screen: the two writes below flip the job's status
-    // optimistically, so anything rendered between them is a screen the
-    // technician never asked for and can act on by mistake.
-    setCelebrate(true);
     // A UPI payment carries its reference, so the office can find it in the
     // bank statement; "not shown" is recorded rather than left blank.
     const viaUpi = payments.some((p) => p.method === "UPI");
     const ref = !viaUpi ? {} : /^\d{12}$/.test(utr) && !utrSkipped ? { utr } : { utr_skipped: true };
-    const paid = await advance("PAID", {
-      payments, total: billTotal, mode, split, ...ref, payment_pending: null,
-      ...(reason ? { low_bill_reason: reason } : {}),
-      ...(remark ? { remark, remark_at: new Date().toISOString() } : {}),
-    });
-    /* The payment did not save. Closing anyway is how OG-051026-0011 ended up
-       Service Done with an amount and no bill — the invoice is raised by the
-       payment write. Back to Payment, with the reason, so he can take it again. */
-    if (paid?.error) { setCelebrate(false); setOv("payFailed:" + paid.error); setBusy(false); return; }
-    const closed = await advance("CLOSED", { nextService: "6 months" });
-    if (closed?.error) { setCelebrate(false); setOv("payFailed:" + closed.error); }
+    const paid = await advance("PAID", { payments, total: billTotal, mode, split, ...ref, payment_pending: null });
     setBusy(false);
+    /* The payment did not save. Going on anyway is how OG-051026-0011 ended up
+       Service Done with an amount and no bill — the invoice is raised by the
+       payment write. Stay on Payment, with the reason, so he can take it again. */
+    if (paid?.error) { setOv("payFailed:" + paid.error); return; }
+    setPayScreen(null);
+  };
+
+  /* A bill under the limit — a bare visit charge, a free or warranty call —
+     needs a reason before the call closes. The owner's reasons are offered as
+     choices; "Other" asks him to type it. */
+  const lowBillLimit = Number(config?.low_bill_limit) > 0 ? Number(config.low_bill_limit) : 500;
+  const lowBill = billTotal < lowBillLimit;
+  const [lowPick, setLowPick] = useState("");
+  const [lowOther, setLowOther] = useState("");
+  const lowReason = lowPick === "Other" ? lowOther.trim() : lowPick;
+  // The call type usually is the reason, so it is picked for him to confirm.
+  useEffect(() => {
+    if (st !== "PAID" || lowPick) return;
+    const usual = { warranty: "Warranty call", installation: "Installation", repeat: "Revisit" }[w.call_type ?? callType];
+    if (usual) setLowPick(usual);
+  }, [st]); // eslint-disable-line react-hooks/exhaustive-deps
+  const serviceDone = async () => {
+    setBusy(true);
+    const closed = await advance("CLOSED", {
+      nextService: "6 months",
+      ...(lowBill ? { low_bill_reason: lowReason } : {}),
+      ...(closeRemark.trim() ? { close_remark: closeRemark.trim() } : {}),
+      ...(customerRemark.trim() ? { customer_remark: customerRemark.trim() } : {}),
+    });
+    setBusy(false);
+    if (closed?.error) { setOv("closeFailed:" + closed.error); return; }
+    setCelebrate(true);
   };
   /* "Payment Pending": the work is done and billed, the customer will pay later.
      Nothing is closed and no payment is recorded — the job is marked and stays
@@ -1204,21 +1202,54 @@ function JobDetailInner({ job }) {
         <Icon.bag width={19} height={19} /> Collect {rupeeAmt(estTotal)} <Icon.chevron width={18} height={18} />
       </PrimaryButton>
     );
-  } else if (viewStep === 3) {
-    if (st === "PAID") {
-      body = (
-        <Card className="mt-2 text-center !py-6">
-          <IconChip tone="green" size={56} radius={16} className="mx-auto"><Icon.check width={28} height={28} /></IconChip>
-          <div className="mt-2.5 text-[20px] font-extrabold text-strong">Payment recorded</div>
-          <div className="mt-1 text-sm text-muted">Close the job to finish.</div>
+  } else if (viewStep === 4) {
+    body = (
+      <>
+        <Heading title="Close Call" sub="Payment is recorded. Add the remarks, then finish the service." />
+        {lowBill && (
+          <Card className="mt-2">
+            <FLabel icon={Icon.alert} must>Reason</FLabel>
+            <div className="-mt-1 mb-2.5 text-sm text-muted">The bill is under {rupeeAmt(lowBillLimit)}. Why?</div>
+            <div className="flex flex-wrap gap-2">
+              {LOW_BILL_REASONS.concat("Other").map((r) => (
+                <button key={r} type="button" aria-pressed={lowPick === r} onClick={() => setLowPick(r)}
+                  className={cx(
+                    "min-h-[44px] rounded-full border px-4 text-[14.5px] font-semibold transition",
+                    lowPick === r ? "border-transparent bg-brand text-white" : "border-hair bg-transparent text-strong"
+                  )}>{r}</button>
+              ))}
+            </div>
+            {lowPick === "Other" && (
+              <input className={cx(input, "mt-3")} maxLength={120} placeholder="Type the reason"
+                value={lowOther} onChange={(e) => setLowOther(e.target.value)} />
+            )}
+          </Card>
+        )}
+        <Card className={lowBill ? "mt-3" : "mt-2"}>
+          <FLabel icon={Icon.wrench}>Technician's remark</FLabel>
+          <div className="-mt-1 mb-2.5 flex items-center gap-1.5 text-sm text-muted">
+            <Icon.whatsapp width={15} height={15} className="shrink-0 text-wa" /> This is sent to the customer on WhatsApp.
+          </div>
+          <textarea rows={3} maxLength={500} value={closeRemark} onChange={(e) => setCloseRemark(e.target.value)}
+            placeholder="What you did, and what the customer should take care of"
+            className={cx(input, "min-h-[88px] w-full resize-none py-3 leading-relaxed")} />
         </Card>
-      );
-      footer = (
-        <PrimaryButton disabled={busy} loading={busy} onClick={async () => { setBusy(true); await advance("CLOSED", { nextService: "6 months" }); setBusy(false); setCelebrate(true); }}>
-          <Icon.checkCircle width={20} height={20} /> Close Job
-        </PrimaryButton>
-      );
-    } else if (payScreen === "cash") {
+        <Card className="mt-3">
+          <FLabel icon={Icon.person}>Customer's remark</FLabel>
+          <div className="-mt-1 mb-2.5 text-sm text-muted">What the customer said about the service. Only the office sees this.</div>
+          <textarea rows={3} maxLength={500} value={customerRemark} onChange={(e) => setCustomerRemark(e.target.value)}
+            placeholder="In the customer's words"
+            className={cx(input, "min-h-[88px] w-full resize-none py-3 leading-relaxed")} />
+        </Card>
+      </>
+    );
+    footer = (
+      <PrimaryButton className="!bg-ok" disabled={busy || (lowBill && lowReason.length < 3)} loading={busy} onClick={serviceDone}>
+        <Icon.checkCircle width={20} height={20} /> Service Done
+      </PrimaryButton>
+    );
+  } else if (viewStep === 3) {
+    if (payScreen === "cash") {
       body = (
         <>
           <Card className="mt-2 text-center !py-6">
@@ -1475,39 +1506,12 @@ function JobDetailInner({ job }) {
           {ov.slice("payFailed:".length)}. The job is still open — check your signal and press the payment button again. Do not take the money twice.
         </MDialog>
       )}
-      {ov === "closeCall" && (
-        <MSheet title="Close call" onClose={() => setOv(null)}
-          footer={
-            <PrimaryButton className="!bg-ok" disabled={busy || (lowBill && lowReason.length < 3)} loading={busy} onClick={closeCall}>
-              <Icon.checkCircle width={20} height={20} /> Finish job · {rupeeAmt(billTotal)}
-            </PrimaryButton>
-          }>
-          {lowBill && (
-            <Card className="mb-3">
-              <FLabel icon={Icon.alert} must>Reason</FLabel>
-              <div className="-mt-1 mb-2.5 text-sm text-muted">The bill is under {rupeeAmt(lowBillLimit)}. Why?</div>
-              <div className="flex flex-wrap gap-2">
-                {LOW_BILL_REASONS.concat("Other").map((r) => (
-                  <button key={r} type="button" aria-pressed={lowPick === r} onClick={() => setLowPick(r)}
-                    className={cx(
-                      "min-h-[44px] rounded-full border px-4 text-[14.5px] font-semibold transition",
-                      lowPick === r ? "border-transparent bg-brand text-white" : "border-hair bg-transparent text-strong"
-                    )}>{r}</button>
-                ))}
-              </div>
-              {lowPick === "Other" && (
-                <input className={cx(input, "mt-3")} autoFocus maxLength={120} placeholder="Type the reason"
-                  value={lowOther} onChange={(e) => setLowOther(e.target.value)} />
-              )}
-            </Card>
-          )}
-          <Card className="mb-3">
-            <FLabel icon={Icon.person}>Your remark for office</FLabel>
-            <textarea rows={3} maxLength={1000} value={closeRemark} onChange={(e) => setCloseRemark(e.target.value)}
-              placeholder="Anything the office should know about this customer or machine"
-              className={cx(input, "min-h-[88px] w-full resize-none py-3 leading-relaxed")} />
-          </Card>
-        </MSheet>
+      {ov?.startsWith?.("closeFailed:") && (
+        <MDialog title="Could not finish the call" onClose={() => setOv(null)}
+          icon={<Icon.alert width={24} height={24} className="text-danger-fg" />} iconClass="bg-danger-tint"
+          actions={<MDialogBtn bold onClick={() => setOv(null)}>OK</MDialogBtn>}>
+          {ov.slice("closeFailed:".length)}. The payment is saved — check your signal and press Service Done again.
+        </MDialog>
       )}
       {ov === "pendingConfirm" && (
         <MDialog title="Mark payment pending?" onClose={() => setOv(null)}

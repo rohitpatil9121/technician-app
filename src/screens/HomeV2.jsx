@@ -95,6 +95,8 @@ function JobRow({ job, priority, onOpen }) {
   const self = job.work?.added_by_tech;
   // Work done and billed, money still to come — says more than "24 hours".
   const payPending = !!job.work?.payment_pending;
+  // Paid and billed, waiting only for him to finish the Close screen.
+  const toClose = job.status === "PAID";
   return (
     <div
       role="button" tabIndex={0}
@@ -108,17 +110,22 @@ function JobRow({ job, priority, onOpen }) {
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
           <span className="truncate text-[16.5px] font-bold tracking-tight text-strong">{job.name}</span>
-          {payPending && (
+          {toClose && (
+            <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-ok px-2 py-0.5 text-[11px] font-extrabold text-white">
+              <Icon.check width={11} height={11} /> Close the call
+            </span>
+          )}
+          {payPending && !toClose && (
             <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-warn px-2 py-0.5 text-[11px] font-extrabold text-white">
               <Icon.clock width={11} height={11} /> Payment pending
             </span>
           )}
-          {priority && !payPending && (
+          {priority && !payPending && !toClose && (
             <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-danger px-2 py-0.5 text-[11px] font-extrabold text-white">
               <Icon.alert width={11} height={11} /> {priority.label}
             </span>
           )}
-          {self && !priority && !payPending && (
+          {self && !priority && !payPending && !toClose && (
             <span className="shrink-0 rounded-full bg-accent-tint px-2 py-0.5 text-[11px] font-extrabold text-accent">Added by you</span>
           )}
         </div>

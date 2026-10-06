@@ -1,4 +1,9 @@
-// The 4-milestone job flow: Reach → Details → Bill → Payment.
+// The 5-milestone job flow: Reach → Details → Bill → Payment → Close.
+//
+// "Close" (owner, 7 Oct 2026) is where the call is finished once the money is
+// in: the technician's remark for the customer, the customer's own remark, the
+// reason for a small bill, and the Service Done button. A job sits on it from
+// the moment its payment is recorded (PAID) until he presses that button.
 //
 // "Work" used to sit between Bill and Payment as a fifth milestone, but it only
 // ever said "do the repair, then press the button" — a screen technicians tapped
@@ -14,6 +19,7 @@ export const STEPS = [
   { key: "details", label: "Details", icon: "drop" },
   { key: "bill", label: "Bill", icon: "receipt" },
   { key: "payment", label: "Payment", icon: "bag" },
+  { key: "close", label: "Close", icon: "checkCircle" },
 ];
 
 // Which milestone a status sits on (the one the technician acts on next).
@@ -32,8 +38,8 @@ const STATUS_STEP = {
   // Payment. A job parked at VERIFIED by an older build lands there too.
   VERIFIED: 3,
   WORK_DONE: 3,
-  PAID: 3,
-  CLOSED: 4,
+  PAID: 4,
+  CLOSED: 5,
 };
 
 export const stepIndexForStatus = (status) =>
