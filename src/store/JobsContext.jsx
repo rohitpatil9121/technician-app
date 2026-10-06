@@ -78,11 +78,21 @@ export function JobsProvider({ children }) {
      on the next poll — a single dropped request used to leave the header reading
      "Namaste, Technician" for the whole session, because nothing ever asked a
      second time. */
+  /* The same call keeps him signed in. A token older than a day comes back with
+     a fresh one, so the session runs from his last day of work rather than from
+     the day he typed a code — the app used to sign every technician out once a
+     week, mid-shift. Asked at start and then a few times a day; asking more
+     often would gain nothing, the server only renews once a day. */
   const userRef = useRef(null);
+  const askedAt = useRef(0);
+  const RENEW_EVERY_MS = 6 * 3600 * 1000;
   const ensureUser = useCallback(async () => {
-    if (userRef.current || !getToken()) return;
+    if (!getToken()) return;
+    if (userRef.current && Date.now() - askedAt.current < RENEW_EVERY_MS) return;
     try {
-      const { user: u } = await api.me();
+      const { user: u, token } = await api.me();
+      askedAt.current = Date.now();
+      if (token) setToken(token);
       if (u) { userRef.current = u; setUser(u); }
     } catch { /* the next poll tries again */ }
   }, []);
