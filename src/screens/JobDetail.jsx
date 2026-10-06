@@ -32,7 +32,7 @@ const LOW_BILL_REASONS = ["Warranty call", "Installation", "Revisit"];
 /* Purifier brands the technician picks from on the Details screen (owner,
    6 Oct 2026). "OTHER" asks him to type the name. What is saved is the brand
    itself — the picked one, or what he typed. */
-const BRANDS = ["KENT", "OASIS", "AQUAGUARD", "AO SMITH", "LIVEPURE", "OTHER"];
+const BRANDS = ["KENT", "OASIS", "AQUAGUARD", "AO SMITH", "LIVEPURE", "PUREIT", "OTHER"];
 const brandPick = (saved) => (!saved ? "" : BRANDS.includes(saved) && saved !== "OTHER" ? saved : "OTHER");
 const brandTyped = (saved) => (saved && brandPick(saved) === "OTHER" ? saved : "");
 
@@ -1226,19 +1226,19 @@ function JobDetailInner({ job }) {
           </Card>
         )}
         <Card className={lowBill ? "mt-3" : "mt-2"}>
-          <FLabel icon={Icon.wrench}>Technician's remark</FLabel>
+          <FLabel icon={Icon.wrench}>Remark for customer</FLabel>
           <div className="-mt-1 mb-2.5 flex items-center gap-1.5 text-sm text-muted">
-            <Icon.whatsapp width={15} height={15} className="shrink-0 text-wa" /> This is sent to the customer on WhatsApp.
+            <Icon.whatsapp width={15} height={15} className="shrink-0 text-wa" /> This remark will be sent to customer on WhatsApp.
           </div>
           <textarea rows={3} maxLength={500} value={closeRemark} onChange={(e) => setCloseRemark(e.target.value)}
             placeholder="What you did, and what the customer should take care of"
             className={cx(input, "min-h-[88px] w-full resize-none py-3 leading-relaxed")} />
         </Card>
         <Card className="mt-3">
-          <FLabel icon={Icon.person}>Customer's remark</FLabel>
-          <div className="-mt-1 mb-2.5 text-sm text-muted">What the customer said about the service. Only the office sees this.</div>
+          <FLabel icon={Icon.person}>Remark for Office</FLabel>
+          <div className="-mt-1 mb-2.5 text-sm text-muted">This remark will be visible to service manager.</div>
           <textarea rows={3} maxLength={500} value={customerRemark} onChange={(e) => setCustomerRemark(e.target.value)}
-            placeholder="In the customer's words"
+            placeholder="Anything the office should know"
             className={cx(input, "min-h-[88px] w-full resize-none py-3 leading-relaxed")} />
         </Card>
       </>
