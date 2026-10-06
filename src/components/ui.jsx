@@ -214,7 +214,7 @@ export const MDialogBtn = ({ danger, bold, children, ...rest }) => (
   <button
     {...rest}
     className={cx(
-      "min-h-[44px] rounded-full px-4 text-sm font-semibold",
+      "min-h-[44px] rounded-full px-4 text-sm font-semibold disabled:opacity-40",
       danger ? "text-danger" : "text-brand",
       bold && "font-bold"
     )}

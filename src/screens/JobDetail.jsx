@@ -466,7 +466,23 @@ function JobDetailInner({ job }) {
 
   /* Payment finish: record PAID then CLOSE in one go (mockup has no separate
      close tap). Chained awaits — the outbox preserves order offline. */
-  const finishPayment = async (payments, mode, split) => {
+  /* A small bill needs a reason before the call closes (owner, 6 Oct 2026).
+
+     Anything under the limit — a bare visit charge, a free or warranty call —
+     is asked "why so little?" once the money is confirmed and before the job
+     is finished. The reason goes to the office with the payment. The answer is
+     asked for here rather than on the bill, because this is the last thing
+     between him and Job Complete: it cannot be skipped by going another way. */
+  const lowBillLimit = Number(config?.low_bill_limit) > 0 ? Number(config.low_bill_limit) : 500;
+  const [lowReason, setLowReason] = useState("");
+  const heldPayment = useRef(null);
+  const finishPayment = async (payments, mode, split, reason) => {
+    if (billTotal < lowBillLimit && !reason) {
+      heldPayment.current = { payments, mode, split };
+      setLowReason(w.low_bill_reason || "");
+      setOv("lowBill");
+      return;
+    }
     setOv(null); setBusy(true);
     // Land on the celebration first, then write. See the note above the
     // `if (celebrate)` screen: the two writes below flip the job's status
@@ -477,7 +493,10 @@ function JobDetailInner({ job }) {
     // bank statement; "not shown" is recorded rather than left blank.
     const viaUpi = payments.some((p) => p.method === "UPI");
     const ref = !viaUpi ? {} : /^\d{12}$/.test(utr) && !utrSkipped ? { utr } : { utr_skipped: true };
-    const paid = await advance("PAID", { payments, total: billTotal, mode, split, ...ref, payment_pending: null });
+    const paid = await advance("PAID", {
+      payments, total: billTotal, mode, split, ...ref, payment_pending: null,
+      ...(reason ? { low_bill_reason: reason } : {}),
+    });
     /* The payment did not save. Closing anyway is how OG-051026-0011 ended up
        Service Done with an amount and no bill — the invoice is raised by the
        payment write. Back to Payment, with the reason, so he can take it again. */
@@ -1436,6 +1455,24 @@ function JobDetailInner({ job }) {
           icon={<Icon.alert width={24} height={24} className="text-danger-fg" />} iconClass="bg-danger-tint"
           actions={<MDialogBtn bold onClick={() => setOv(null)}>OK</MDialogBtn>}>
           {ov.slice("payFailed:".length)}. The job is still open — check your signal and press the payment button again. Do not take the money twice.
+        </MDialog>
+      )}
+      {ov === "lowBill" && (
+        <MDialog title={`Why is the bill only ${rupeeAmt(billTotal)}?`} onClose={() => setOv(null)}
+          icon={<Icon.alert width={24} height={24} className="text-warn-fg" />} iconClass="bg-warn-tint"
+          actions={
+            <>
+              <MDialogBtn onClick={() => setOv(null)}>Back</MDialogBtn>
+              <MDialogBtn bold disabled={lowReason.trim().length < 5}
+                onClick={() => { const h = heldPayment.current; if (h) finishPayment(h.payments, h.mode, h.split, lowReason.trim()); }}>
+                Finish job
+              </MDialogBtn>
+            </>
+          }>
+          <div>A bill under {rupeeAmt(lowBillLimit)} needs a reason for the office.</div>
+          <textarea rows={3} autoFocus maxLength={200} value={lowReason} onChange={(e) => setLowReason(e.target.value)}
+            placeholder="e.g. Only cleaning done, no part needed"
+            className={cx(input, "mt-3 w-full resize-none py-3 text-[16px] leading-relaxed")} />
         </MDialog>
       )}
       {ov === "pendingConfirm" && (
