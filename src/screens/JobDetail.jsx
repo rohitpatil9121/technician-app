@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useJobs } from "../store/JobsContext.jsx";
-import { CALL_TYPES, billConfig, chargeTypes } from "../data/charges.js";
+import { CALL_TYPES, REVISIT_TYPE, ALL_CALL_TYPES, billConfig, chargeTypes } from "../data/charges.js";
 import { rupee, rupeeAmt } from "../lib/format.js";
 import { mediaUrl } from "../lib/api.js";
 import { callPhone, openMaps, openWhatsApp } from "../lib/contact.js";
@@ -26,6 +26,13 @@ import { stepIndexForStatus, STEPS } from "../lib/workflow.js";
 /* Same options the dashboard offers (frontend/src/components/CancelModal.jsx).
    Kept in step by hand — the two apps are separate builds — so that cancellation
    reasons stay comparable across the field and the office. */
+/* Purifier brands the technician picks from on the Details screen (owner,
+   6 Oct 2026). "OTHER" asks him to type the name. What is saved is the brand
+   itself — the picked one, or what he typed. */
+const BRANDS = ["KENT", "OASIS", "AQUAGUARD", "AO SMITH", "LIVEPURE", "OTHER"];
+const brandPick = (saved) => (!saved ? "" : BRANDS.includes(saved) && saved !== "OTHER" ? saved : "OTHER");
+const brandTyped = (saved) => (saved && brandPick(saved) === "OTHER" ? saved : "");
+
 /* The owner's list (6 Oct 2026), in plain words. The customer is sent the reason
    on WhatsApp, so each one has to read sensibly to them as well as to the
    technician. "Other" asks him to type the reason. */
@@ -174,6 +181,14 @@ function JobDetailInner({ job }) {
   const [modelName, setModelName] = useState(
     draft?.modelName ?? w.model_name ?? (job.model && job.model !== "—" ? job.model : "")
   );
+  // What the call was, typed by him when the type is "Other".
+  const [callTypeNote, setCallTypeNote] = useState(draft?.callTypeNote ?? w.call_type_note ?? "");
+  const needsTypeNote = callType === "other" && !callTypeNote.trim();
+  const typeNote = callType === "other" ? { call_type_note: callTypeNote.trim() } : { call_type_note: null };
+  const [brand, setBrand] = useState(draft?.brand ?? brandPick(w.brand));
+  const [brandOther, setBrandOther] = useState(draft?.brandOther ?? brandTyped(w.brand));
+  // The brand as it is saved: the one picked, or the name typed for OTHER.
+  const brandValue = brand === "OTHER" ? brandOther.trim().toUpperCase() : brand;
   const [partSearch, setPartSearch] = useState("");
   const [busy, setBusy] = useState(false);
   const [photoBusy, setPhotoBusy] = useState(false);
@@ -213,7 +228,7 @@ function JobDetailInner({ job }) {
   const [celebrate, setCelebrate] = useState(false);
 
   const draftRef = useRef({});
-  draftRef.current = { callType, serviceCharge, parts, modelName, cashPart };
+  draftRef.current = { callType, serviceCharge, parts, modelName, cashPart, brand, brandOther, callTypeNote };
 
   /* A part with an office-fixed price is billed at exactly that price. Parts
      come onto the bill from three places — the picker, a saved bill and a
@@ -247,7 +262,7 @@ function JobDetailInner({ job }) {
   useEffect(() => {
     pinRoute(`/job/${job.id}`);
     applyJobDraft(loadJobDraft(job.id), {
-      setCallType, setServiceCharge, setParts, setModelName, setCashPart,
+      setCallType, setServiceCharge, setParts, setModelName, setCashPart, setBrand, setBrandOther, setCallTypeNote,
     });
     acknowledgeJobResume();
   }, [job.id]);
@@ -267,7 +282,7 @@ function JobDetailInner({ job }) {
   useEffect(() => {
     const t = setTimeout(() => saveJobDraft(job.id, draftRef.current), 150);
     return () => clearTimeout(t);
-  }, [job.id, callType, serviceCharge, parts, modelName, cashPart]);
+  }, [job.id, callType, serviceCharge, parts, modelName, cashPart, brand, brandOther, callTypeNote]);
 
   // Android can destroy the WebView while the camera is open — replay the shot.
   // It is offered for confirmation exactly like a shot taken in-session, on the
@@ -359,7 +374,9 @@ function JobDetailInner({ job }) {
   const badPrice = parts.some((p) => priceLimit(p));
   const estTotal = serviceCharge + partsTotal;
   const billTotal = Number(w.total ?? estTotal);
-  const typeOf = CALL_TYPES.find((c) => c.id === callType) || CALL_TYPES[0];
+  const typeOf = ALL_CALL_TYPES.find((c) => c.id === callType) || CALL_TYPES[2];
+  // A call raised with the Revisit button keeps Revisit as a choice.
+  const typeChoices = callType === "repeat" || w.revisit_of ? ALL_CALL_TYPES : CALL_TYPES;
 
   /* Picker rows are a toggle, not a counter: tap once to add the part, tap the
      same row again to take it off the bill. Repeated taps used to stack
@@ -460,7 +477,7 @@ function JobDetailInner({ job }) {
     // bank statement; "not shown" is recorded rather than left blank.
     const viaUpi = payments.some((p) => p.method === "UPI");
     const ref = !viaUpi ? {} : /^\d{12}$/.test(utr) && !utrSkipped ? { utr } : { utr_skipped: true };
-    const paid = await advance("PAID", { payments, total: billTotal, mode, split, ...ref });
+    const paid = await advance("PAID", { payments, total: billTotal, mode, split, ...ref, payment_pending: null });
     /* The payment did not save. Closing anyway is how OG-051026-0011 ended up
        Service Done with an amount and no bill — the invoice is raised by the
        payment write. Back to Payment, with the reason, so he can take it again. */
@@ -468,6 +485,17 @@ function JobDetailInner({ job }) {
     const closed = await advance("CLOSED", { nextService: "6 months" });
     if (closed?.error) { setCelebrate(false); setOv("payFailed:" + closed.error); }
     setBusy(false);
+  };
+  /* "Payment Pending": the work is done and billed, the customer will pay later.
+     Nothing is closed and no payment is recorded — the job is marked and stays
+     in his Pending list (and under Assigned on the office board) until he opens
+     it again and takes the money the usual way. */
+  const markPaymentPending = async () => {
+    setOv(null); setBusy(true);
+    const res = await advance("WORK_DONE", { total: billTotal, payment_pending: true, payment_pending_at: new Date().toISOString() });
+    setBusy(false);
+    if (res?.error) { setOv("payFailed:" + res.error); return; }
+    goBack();
   };
   const upiRemainder = Math.max(0, billTotal - Math.min(cashPart, billTotal));
 
@@ -486,7 +514,7 @@ function JobDetailInner({ job }) {
     setBusy(true); setBillErr("");
     const saved = await advance("VERIFIED", {
       call_type: callType, charge: callType, service_charge: serviceCharge,
-      parts, total: estTotal, model_name: modelName.trim(), work_started: true,
+      parts, total: estTotal, model_name: modelName.trim(), ...(brandValue ? { brand: brandValue } : {}), ...typeNote, work_started: true,
     }, "estimate");
     /* The server refused the bill. Going on to Payment anyway is how
        OG-021026-0007 happened: the total reached the server on its own, the
@@ -567,6 +595,8 @@ function JobDetailInner({ job }) {
     setServiceCharge(Number(w.service_charge ?? (job.visitCharge === 0 ? 0 : bill.serviceCharge)));
     setParts(w.parts ?? []);
     setModelName(w.model_name ?? (job.model && job.model !== "—" ? job.model : ""));
+    setBrand(brandPick(w.brand)); setBrandOther(brandTyped(w.brand));
+    setCallTypeNote(w.call_type_note ?? "");
     stepForward();
   };
 
@@ -582,7 +612,7 @@ function JobDetailInner({ job }) {
     setBusy(true);
     const work = {
       call_type: callType, charge: callType, service_charge: serviceCharge,
-      parts, total: estTotal, model_name: modelName.trim(),
+      parts, total: estTotal, model_name: modelName.trim(), ...(brandValue ? { brand: brandValue } : {}), ...typeNote,
     };
     if (editBill) {
       /* A corrected bill has to reach the customer exactly like a new one does —
@@ -658,7 +688,7 @@ function JobDetailInner({ job }) {
   if (celebrate || st === "CLOSED") {
     // Read the call type off the SAVED work, not the editable state: a job
     // finished by an older build may carry only the legacy `charge` id.
-    const doneType = CALL_TYPES.find((c) => c.id === (w.call_type ?? w.charge)) || typeOf;
+    const doneType = ALL_CALL_TYPES.find((c) => c.id === (w.call_type ?? w.charge)) || typeOf;
     return (
       <div className="safe-x safe-top mx-auto flex h-screen w-full max-w-[440px] flex-col overflow-hidden bg-sunken">
         <JobHead job={job} onBack={goBack} label="Done" />
@@ -682,7 +712,7 @@ function JobDetailInner({ job }) {
 
           <SecH>Bill</SecH>
           <Card>
-            <Row l="Call type" r={doneType.label} muted />
+            <Row l="Call type" r={doneType.id === "other" && w.call_type_note ? w.call_type_note : doneType.label} muted />
             {billLines}
             <div className="mt-2 flex items-center justify-between border-t border-line pt-2.5">
               <span className="text-[16px] font-bold text-strong">Total paid</span>
@@ -851,12 +881,24 @@ function JobDetailInner({ job }) {
       </div>
     );
   } else if (viewStep === 1) {
-    const canContinue = modelName.trim() && techPhotos.length > 0;
+    const canContinue = brandValue && modelName.trim() && techPhotos.length > 0;
     body = (
       <>
         <Heading title="Purifier Details"
-          sub={revisiting ? "Fix the model or add a photo, then save." : "Confirm the model and take photos."} />
+          sub={revisiting ? "Fix the brand, the model or add a photo, then save." : "Pick the brand, confirm the model and take photos."} />
         <Card className="mt-2">
+          <FLabel icon={Icon.shield} must>Brand</FLabel>
+          <select className={input} value={brand} aria-label="Purifier brand"
+            onChange={(e) => { setBrand(e.target.value); if (e.target.value !== "OTHER") setBrandOther(""); }}>
+            <option value="" disabled>Select the brand</option>
+            {BRANDS.map((b) => <option key={b} value={b}>{b}</option>)}
+          </select>
+          {brand === "OTHER" && (
+            <input className={cx(input, "mt-2.5")} placeholder="Type the brand name" maxLength={40} autoFocus
+              value={brandOther} onChange={(e) => setBrandOther(e.target.value)} />
+          )}
+        </Card>
+        <Card className="mt-3">
           <FLabel icon={Icon.drop} must>Purifier Model</FLabel>
           <input className={input} placeholder="e.g. Kent RO Grand" value={modelName} onChange={(e) => setModelName(e.target.value)} />
         </Card>
@@ -886,10 +928,6 @@ function JobDetailInner({ job }) {
             </button>
           </div>
         </Card>
-        {/* Something he wants the office to know (customer wants AMC, machine is old,
-            next time bring 1 m pipe). Written any time during the visit — the Bill
-            and Payment screens are too narrow for it. */}
-        <RemarkCard job={job} />
       </>
     );
     footer = revisiting ? (
@@ -902,7 +940,7 @@ function JobDetailInner({ job }) {
         </PrimaryButton>
       </div>
     ) : (
-      <PrimaryButton disabled={!canContinue || busy} loading={busy} onClick={() => advanceOnce("DIAGNOSED", { model_name: modelName.trim() })}>
+      <PrimaryButton disabled={!canContinue || busy} loading={busy} onClick={() => advanceOnce("DIAGNOSED", { model_name: modelName.trim(), brand: brandValue })}>
         Continue <Icon.chevron width={19} height={19} />
       </PrimaryButton>
     );
@@ -920,7 +958,7 @@ function JobDetailInner({ job }) {
             and the parts list off the first screenful. The tick still marks the
             choice, moved inline so nothing has to be reserved for it. */}
         <div className="grid grid-cols-2 gap-2">
-          {CALL_TYPES.map((c) => {
+          {typeChoices.map((c) => {
             const on = callType === c.id;
             return (
               <button key={c.id} type="button" aria-pressed={on}
@@ -953,6 +991,13 @@ function JobDetailInner({ job }) {
             );
           })}
         </div>
+        {callType === "other" && (
+          <Card className="mt-2.5">
+            <FLabel icon={Icon.wrench} must>What is this call?</FLabel>
+            <input className={input} placeholder="e.g. Shifting the purifier, AMC visit" maxLength={80}
+              value={callTypeNote} onChange={(e) => setCallTypeNote(e.target.value)} />
+          </Card>
+        )}
         <SecH>2 · Service charge</SecH>
         <Card>
           <div className="flex items-center justify-between gap-3">
@@ -1109,7 +1154,7 @@ function JobDetailInner({ job }) {
         <GhostButton className="flex-1" onClick={discardRevisit}>
           <Icon.back width={18} height={18} /> Cancel
         </GhostButton>
-        <PrimaryButton className="flex-[1.4] !bg-ok" disabled={busy || badPrice} loading={busy} onClick={saveRevisit}>
+        <PrimaryButton className="flex-[1.4] !bg-ok" disabled={busy || badPrice || needsTypeNote} loading={busy} onClick={saveRevisit}>
           <Icon.checkCircle width={18} height={18} /> Save Bill · {rupeeAmt(estTotal)}
         </PrimaryButton>
       </div>
@@ -1118,7 +1163,7 @@ function JobDetailInner({ job }) {
          write still goes out from here — collectPayment records the estimate and
          then work-done before landing on Payment — so the office still gets
          work_done_at and the customer still gets both WhatsApp messages. */
-      <PrimaryButton className="!bg-ok" disabled={busy || badPrice} loading={busy} onClick={collectPayment}>
+      <PrimaryButton className="!bg-ok" disabled={busy || badPrice || needsTypeNote} loading={busy} onClick={collectPayment}>
         <Icon.bag width={19} height={19} /> Collect {rupeeAmt(estTotal)} <Icon.chevron width={18} height={18} />
       </PrimaryButton>
     );
@@ -1276,6 +1321,8 @@ function JobDetailInner({ job }) {
             <PayRow tone="blue" icon={Icon.phoneupi} a="UPI / Online" b="Show QR code to scan" onClick={() => goPay("upi")} />
             <PayRow tone="purple" icon={Icon.split} a="Part Cash + Part UPI" b="Split the money"
               onClick={() => { setCashPart(Math.round(billTotal / 2 / 50) * 50); setUpiDone(false); setCashDone(false); goPay("split"); }} />
+            <PayRow tone="amber" icon={Icon.clock} a="Payment Pending" b="Customer will pay later"
+              onClick={() => setOv("pendingConfirm")} />
           </div>
           <div className="mt-3.5 flex items-center gap-2.5 rounded-2xl bg-brand-tint p-3.5 text-[14.5px] font-medium text-brand-dark">
             <Icon.checkCircle width={19} height={19} className="shrink-0" /> You can go back and change the method any time before you confirm.
@@ -1389,6 +1436,18 @@ function JobDetailInner({ job }) {
           icon={<Icon.alert width={24} height={24} className="text-danger-fg" />} iconClass="bg-danger-tint"
           actions={<MDialogBtn bold onClick={() => setOv(null)}>OK</MDialogBtn>}>
           {ov.slice("payFailed:".length)}. The job is still open — check your signal and press the payment button again. Do not take the money twice.
+        </MDialog>
+      )}
+      {ov === "pendingConfirm" && (
+        <MDialog title="Mark payment pending?" onClose={() => setOv(null)}
+          icon={<Icon.clock width={24} height={24} className="text-warn-fg" />} iconClass="bg-warn-tint"
+          actions={
+            <>
+              <MDialogBtn onClick={() => setOv(null)}>No</MDialogBtn>
+              <MDialogBtn bold onClick={markPaymentPending}>Yes, pending</MDialogBtn>
+            </>
+          }>
+          {rupeeAmt(billTotal)} is still to be collected. The job stays in your Pending list until you take the payment.
         </MDialog>
       )}
       {ov === "cashConfirm" && (
