@@ -83,7 +83,8 @@ export default function Login() {
               <p className="mt-2 text-xs text-subtle">
                 {phone.length === 0 ? "10 digits, without the +91"
                   : phone.length < 10 ? `${10 - phone.length} more digit${10 - phone.length === 1 ? "" : "s"}`
-                  : "Ready to send"}
+                  : /^[6-9]/.test(phone) ? "Ready to send"
+                  : "An Indian mobile number starts with 6, 7, 8 or 9."}
               </p>
             </Card>
             <div className="mt-3">
@@ -126,7 +127,7 @@ export default function Login() {
 
       <div className="safe-bottom px-4 pb-4 pt-2">
         {!otpSent ? (
-          <PrimaryButton onClick={sendOtp} disabled={phone.length < 10} loading={busy}>
+          <PrimaryButton onClick={sendOtp} disabled={!/^[6-9]\d{9}$/.test(phone)} loading={busy}>
             {busy ? "Sending…" : "Send Code"} {!busy && <Icon.chevron width={19} height={19} />}
           </PrimaryButton>
         ) : (

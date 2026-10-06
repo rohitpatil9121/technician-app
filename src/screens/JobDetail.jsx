@@ -865,6 +865,10 @@ function JobDetailInner({ job }) {
             </button>
           </div>
         </Card>
+        {/* Something he wants the office to know (customer wants AMC, machine is old,
+            next time bring 1 m pipe). Written any time during the visit — the Bill
+            and Payment screens are too narrow for it. */}
+        <RemarkCard job={job} />
       </>
     );
     footer = revisiting ? (
@@ -901,6 +905,12 @@ function JobDetailInner({ job }) {
               <button key={c.id} type="button" aria-pressed={on}
                 onClick={() => {
                   setCallType(c.id);
+                  // Warranty and a revisit inside the window are free by rule —
+                  // the office does not charge for either, and the invoice label
+                  // ("No Charge (Under Warranty)") must not be printed against a
+                  // paid amount. Switching back to Service re-opens the presets.
+                  if (c.id === "warranty" || c.id === "repeat") setServiceCharge(0);
+                  else if (c.id === "service" && serviceCharge === 0) setServiceCharge(bill.serviceCharge || 250);
                   // Pre-fill only when the office has fixed an installation
                   // price; normally it is 250 or 350 by lead and the tech picks.
                   if (c.id === "installation" && bill.installationCharge != null) setServiceCharge(bill.installationCharge);
@@ -927,7 +937,11 @@ function JobDetailInner({ job }) {
           <div className="flex items-center justify-between gap-3">
             <div>
               <div className="text-[16px] font-bold text-strong">Amount to collect</div>
-              <div className="mt-0.5 text-[12.5px] text-muted">Pick one of the amounts below</div>
+              <div className="mt-0.5 text-[12.5px] text-muted">
+                {callType === "warranty" ? "No charge — the customer is under warranty"
+                  : callType === "repeat" ? "Free revisit — the customer is not billed again"
+                  : "Pick one of the amounts below"}
+              </div>
             </div>
             {/* Shown, not typed (owner's call): the charge is one of the office's
                 amounts below, never a figure the technician makes up. */}
@@ -935,16 +949,22 @@ function JobDetailInner({ job }) {
               {serviceCharge === 0 ? "Free" : rupeeAmt(serviceCharge)}
             </div>
           </div>
+          {/* The presets are off for Warranty / Revisit — those are free by
+              office rule. Switching the call type back to Service brings them
+              back and restores a non-zero default. */}
           <div className="mt-3 flex gap-2">
             {bill.presets.map((v) => {
               const on = serviceCharge === v;
+              const forcedFree = callType === "warranty" || callType === "repeat";
               return (
-                <button key={v} type="button" onClick={() => setServiceCharge(v)} aria-pressed={on}
+                <button key={v} type="button" disabled={forcedFree}
+                  onClick={() => setServiceCharge(v)} aria-pressed={on}
                   className={cx(
                     "min-h-[44px] flex-1 rounded-full border text-sm font-bold transition",
                     on
                       ? v === 0 ? "border-transparent bg-ok text-white" : "border-transparent bg-brand text-white"
-                      : "border-hair bg-transparent text-strong"
+                      : "border-hair bg-transparent text-strong",
+                    forcedFree && !on && "opacity-40"
                   )}>
                   {v === 0 ? "Free" : rupeeAmt(v)}
                 </button>
