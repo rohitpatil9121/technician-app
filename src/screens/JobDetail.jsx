@@ -26,13 +26,16 @@ import { stepIndexForStatus, STEPS } from "../lib/workflow.js";
 /* Same options the dashboard offers (frontend/src/components/CancelModal.jsx).
    Kept in step by hand — the two apps are separate builds — so that cancellation
    reasons stay comparable across the field and the office. */
+/* The owner's list (6 Oct 2026), in plain words. The customer is sent the reason
+   on WhatsApp, so each one has to read sensibly to them as well as to the
+   technician. "Other" asks him to type the reason. */
 const CANCEL_REASONS = [
-  "Customer no longer needs the service",
-  "Issue resolved on its own",
-  "Customer found another service provider",
+  "AMC call — not covered by us",
+  "We do not service this purifier brand",
+  "Customer asked to cancel",
+  "Could not contact the customer",
+  "Outside our service area",
   "Duplicate request",
-  "Unable to reach the customer",
-  "Out of service area",
   "Other",
 ];
 
@@ -501,10 +504,20 @@ function JobDetailInner({ job }) {
 
   /* "I Reached": the arrival OTP was removed with the M3 redesign (client call)
      — a confirmation dialog starts the job. enroute must LAND before arrive. */
+  /* Where he was when he said he had reached. The fix is asked for the moment
+     he taps Reached, while the confirmation is still on screen, so it is usually
+     ready by the time he answers; a few seconds are allowed for it and then the
+     job starts regardless — no GPS in a stairwell must not hold him at the door. */
+  const reachFix = useRef(null);
+  const askReached = () => { reachFix.current = getPositionOnce(); setOv("reached"); };
   const confirmReached = async () => {
     setOv(null); setBusy(true);
     if (st === "NEW" || st === "ACCEPTED") await advance("ON_THE_WAY");
-    await advance("ARRIVED");
+    const fix = await Promise.race([
+      reachFix.current || getPositionOnce(),
+      new Promise((r) => setTimeout(() => r(null), 5000)),
+    ]);
+    await advance("ARRIVED", fix ? { arrive_location: fix } : undefined);
     setBusy(false);
   };
 
@@ -827,7 +840,7 @@ function JobDetailInner({ job }) {
       </PrimaryButton>
     ) : (
       <div className="flex w-full flex-col gap-2">
-        <PrimaryButton className="!bg-ok" disabled={busy} loading={busy} onClick={() => setOv("reached")}>
+        <PrimaryButton className="!bg-ok" disabled={busy} loading={busy} onClick={askReached}>
           <Icon.checkCircle width={20} height={20} /> Reached
         </PrimaryButton>
         <button type="button" disabled={busy}
@@ -1297,16 +1310,14 @@ function JobDetailInner({ job }) {
       )}
 
       {ov === "reached" && (
-        <MDialog title={`Reached ${job.name}?`} onClose={() => setOv(null)}
+        <MDialog title={`Reached ${job.name}'s Location?`} onClose={() => setOv(null)}
           icon={<Icon.pin width={24} height={24} className="text-ok-fg" />} iconClass="bg-ok-tint"
           actions={
             <>
               <MDialogBtn onClick={() => setOv(null)}>Not yet</MDialogBtn>
               <MDialogBtn bold onClick={confirmReached}>Yes, I'm here</MDialogBtn>
             </>
-          }>
-          Confirm you are at the customer's home. This starts the job.
-        </MDialog>
+          } />
       )}
       {ov === "cancel" && (
         <MDialog title="Cancel this request?" onClose={() => setOv(null)}

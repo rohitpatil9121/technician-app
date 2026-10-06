@@ -43,8 +43,15 @@ function priorityOf(j, now) {
 
 /* Which IST day a job was finished on, and how that day reads as a heading. */
 const istDay = (d) => new Date(d).toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" });
+/* The Completed tab is a working list, not an archive (owner, 6 Oct 2026): it
+   holds the last 30 days, and Revisit is offered for the days a revisit is
+   still free — after that the customer is a new call. */
+const COMPLETED_DAYS = 30;
+const closedAtOf = (j) => j.closedAt || j.work?.closed_at || null;
+const daysSince = (at, now) => (now - new Date(at).getTime()) / DAY_MS;
+
 const closedDayLabel = (j) => {
-  const at = j.work?.closed_at;
+  const at = closedAtOf(j);
   if (!at) return String(j.when || "Earlier").split(",")[0]; // closed before the stamp existed
   const d = istDay(at);
   if (d === istDay(Date.now())) return "Today";
@@ -126,7 +133,7 @@ function JobRow({ job, priority, onOpen }) {
   );
 }
 
-export function HomeV2({ jobs = [], loading, error, staleWarning, onRetry, onOpen = () => {}, onNewCall = () => {}, onRevisit }) {
+export function HomeV2({ jobs = [], loading, error, staleWarning, onRetry, onOpen = () => {}, onNewCall = () => {}, onRevisit, revisitDays = 10 }) {
   /* Revisit is confirmed before anything is sent: it opens a new call and the
      customer gets a WhatsApp, so a stray tap must not do it. */
   const [revisitJob, setRevisitJob] = useState(null);
@@ -159,12 +166,15 @@ export function HomeV2({ jobs = [], loading, error, staleWarning, onRetry, onOpe
   const doneGroups = useMemo(() => {
     const groups = [];
     for (const j of jobs.filter(CLOSED)) {
+      const at = closedAtOf(j);
+      // A job with no closing date on it cannot be shown to be old, so it stays.
+      if (at && daysSince(at, now) > COMPLETED_DAYS) continue;
       const day = closedDayLabel(j);
       const g = groups.find((x) => x.day === day);
       if (g) g.items.push(j); else groups.push({ day, items: [j] });
     }
     return groups;
-  }, [jobs]);
+  }, [jobs, now]);
   const doneCount = doneGroups.reduce((s, g) => s + g.items.length, 0);
 
   const rows = useMemo(() => {
@@ -253,7 +263,8 @@ export function HomeV2({ jobs = [], loading, error, staleWarning, onRetry, onOpe
               <div className="mx-1 mb-1 mt-4 text-[13px] font-extrabold text-muted">{g.day}</div>
               {g.items.map((j) => (
                 <DoneRow key={j.id} job={j} onOpen={onOpen}
-                  onRevisit={onRevisit ? (job) => { setRevisitErr(""); setRevisitJob(job); } : undefined} />
+                  onRevisit={onRevisit && daysSince(closedAtOf(j), now) <= revisitDays
+                    ? (job) => { setRevisitErr(""); setRevisitJob(job); } : undefined} />
               ))}
             </div>
           ))}
@@ -289,7 +300,7 @@ export function HomeV2({ jobs = [], loading, error, staleWarning, onRetry, onOpe
 
 /* Route-level wrapper binding the store. */
 export default function HomeScreen() {
-  const { jobs, live, jobsLoading, jobsError, loadJobs, addJob } = useJobs();
+  const { jobs, live, jobsLoading, jobsError, loadJobs, addJob, config } = useJobs();
   const nav = useNavigate();
 
   useEffect(() => {
@@ -310,6 +321,7 @@ export default function HomeScreen() {
         onRetry={() => loadJobs()}
         onOpen={(job) => nav(`/job/${job.id}`)}
         onNewCall={() => nav("/new-call")}
+        revisitDays={Number(config?.revisit_days) > 0 ? Number(config.revisit_days) : 10}
         onRevisit={async (job) => {
           const { job: created } = await api.revisit(job.id);
           if (!created) throw new Error("Could not open the revisit");
