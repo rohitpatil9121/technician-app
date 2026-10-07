@@ -281,6 +281,14 @@ export function installMockApi() {
     });
     if (path === "/api/tech/availability" || path === "/api/tech/push-token" || path === "/api/tech/location") return ok({ ok: true });
 
+    // A cancelled job leaves the list, as it does on the server.
+    const cancel = path.match(/^\/api\/tech\/jobs\/([^/]+)\/cancel$/);
+    if (cancel) {
+      const at = jobs.findIndex((j) => j.id === cancel[1]);
+      if (at >= 0) jobs.splice(at, 1);
+      return ok({ ok: true });
+    }
+
     const revisit = path.match(/^\/api\/tech\/jobs\/([^/]+)\/revisit$/);
     if (revisit) {
       const orig = jobs.find((j) => j.id === revisit[1]);
