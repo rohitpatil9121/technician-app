@@ -162,7 +162,10 @@ const seedJobs = () => [
   const bucket = ["ON_THE_WAY", "ESTIMATE_SENT", "REJECTED"].includes(j.status) ? "pending" : "today";
   // Held since yesterday for the "pending" ones; the fourth job is a revisit.
   const assignedAt = new Date(Date.now() - (bucket === "pending" ? 30 : 3) * 3600 * 1000).toISOString();
-  return { ...j, bucket, assignedAt, revisit: i === 3 };
+  // A finished job carries the time it was closed, as the server sends it —
+  // the Completed list reads it to decide whether Revisit is still on offer.
+  const closedAt = j.status === "CLOSED" ? new Date(Date.now() - 2 * 3600 * 1000).toISOString() : undefined;
+  return { ...j, bucket, assignedAt, revisit: i === 3, ...(closedAt ? { closedAt } : {}) };
 });
 
 const REVIEWS = {
@@ -297,7 +300,7 @@ export function installMockApi() {
       if (!job) return ok({ error: "Not found" });
       job.status = ACTION_STATUS[body.action] || job.status;
       job.work = { ...job.work, ...(body.work || {}) };
-      if (job.status === "CLOSED") job.bucket = "today";
+      if (job.status === "CLOSED") { job.bucket = "today"; job.closedAt = new Date().toISOString(); }
       return ok({ job: { ...job } });
     }
 
