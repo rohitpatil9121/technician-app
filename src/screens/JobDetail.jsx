@@ -1226,19 +1226,19 @@ function JobDetailInner({ job }) {
           </Card>
         )}
         <Card className={lowBill ? "mt-3" : "mt-2"}>
+          <FLabel icon={Icon.person}>Remark for Office</FLabel>
+          <div className="-mt-1 mb-2.5 text-sm text-muted">This remark will be visible to service manager.</div>
+          <textarea rows={3} maxLength={500} value={customerRemark} onChange={(e) => setCustomerRemark(e.target.value)}
+            placeholder="Anything the office should know"
+            className={cx(input, "min-h-[88px] w-full resize-none py-3 leading-relaxed")} />
+        </Card>
+        <Card className="mt-3">
           <FLabel icon={Icon.wrench}>Remark for customer</FLabel>
           <div className="-mt-1 mb-2.5 flex items-center gap-1.5 text-sm text-muted">
             <Icon.whatsapp width={15} height={15} className="shrink-0 text-wa" /> This remark will be sent to customer on WhatsApp.
           </div>
           <textarea rows={3} maxLength={500} value={closeRemark} onChange={(e) => setCloseRemark(e.target.value)}
             placeholder="What you did, and what the customer should take care of"
-            className={cx(input, "min-h-[88px] w-full resize-none py-3 leading-relaxed")} />
-        </Card>
-        <Card className="mt-3">
-          <FLabel icon={Icon.person}>Remark for Office</FLabel>
-          <div className="-mt-1 mb-2.5 text-sm text-muted">This remark will be visible to service manager.</div>
-          <textarea rows={3} maxLength={500} value={customerRemark} onChange={(e) => setCustomerRemark(e.target.value)}
-            placeholder="Anything the office should know"
             className={cx(input, "min-h-[88px] w-full resize-none py-3 leading-relaxed")} />
         </Card>
       </>
