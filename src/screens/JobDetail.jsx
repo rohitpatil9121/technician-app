@@ -16,7 +16,6 @@ import { queuedPhoto, queuedCancel, onOutboxChange } from "../lib/sync.js";
 import { pendingPhotos } from "../lib/outbox.js";
 import UpiQr from "../components/UpiQr.jsx";
 import RemarkCard from "../components/RemarkCard.jsx";
-import UtrField, { utrOk } from "../components/UtrField.jsx";
 import {
   Icon, IconChip, Card, FLabel, PrimaryButton, GhostButton, MDialog, MDialogBtn, MSheet, PlusMinus,
   input, cx, Skeleton, JobPhoto,
@@ -221,9 +220,6 @@ function JobDetailInner({ job }) {
   const [upiDone, setUpiDone] = useState(false);
   const [cashDone, setCashDone] = useState(false);
   const [upiProofUrl, setUpiProofUrl] = useState(null);
-  // The UPI reference the customer's phone shows, or "not shown" (see UtrField).
-  const [utr, setUtr] = useState("");
-  const [utrSkipped, setUtrSkipped] = useState(false);
   /* overlays: one at a time, mockup-style */
   const [ov, setOv] = useState(null); // reached | cancel | picker | cashConfirm | upiConfirm | splitCash | splitUpi | splitConfirm | preview:<url>
   // Cancellation, offered alongside "Reached". Same reason list the dashboard
@@ -484,9 +480,7 @@ function JobDetailInner({ job }) {
     setOv(null); setBusy(true);
     // A UPI payment carries its reference, so the office can find it in the
     // bank statement; "not shown" is recorded rather than left blank.
-    const viaUpi = payments.some((p) => p.method === "UPI");
-    const ref = !viaUpi ? {} : /^\d{12}$/.test(utr) && !utrSkipped ? { utr } : { utr_skipped: true };
-    const paid = await advance("PAID", { payments, total: billTotal, mode, split, ...ref, payment_pending: null });
+    const paid = await advance("PAID", { payments, total: billTotal, mode, split, payment_pending: null });
     setBusy(false);
     /* The payment did not save. Going on anyway is how OG-051026-0011 ended up
        Service Done with an amount and no bill — the invoice is raised by the
@@ -1291,15 +1285,14 @@ function JobDetailInner({ job }) {
             <div className="-mt-1 mb-2.5 text-sm text-muted">After they pay, photograph the success screen on their phone.</div>
             <ProofTile url={upiProofUrl} busy={photoBusy} onTake={takeProofPhoto} onView={() => upiProofUrl && setOv("preview:" + upiProofUrl)} />
           </Card>
-          <UtrField value={utr} onChange={setUtr} skipped={utrSkipped} onSkip={setUtrSkipped} />
         </>
       );
       footer = (
         <div className="space-y-2.5">
-          <PrimaryButton className="!bg-ok" disabled={!upiProofUrl || !utrOk(utr, utrSkipped) || photoBusy || busy} loading={busy} onClick={() => setOv("upiConfirm")}>
+          <PrimaryButton className="!bg-ok" disabled={!upiProofUrl || photoBusy || busy} loading={busy} onClick={() => setOv("upiConfirm")}>
             <Icon.checkCircle width={20} height={20} /> Payment Received
           </PrimaryButton>
-          <GhostButton className="w-full" onClick={() => { goPay(null); setUpiProofUrl(null); setUtr(""); setUtrSkipped(false); }}>
+          <GhostButton className="w-full" onClick={() => { goPay(null); setUpiProofUrl(null); }}>
             <Icon.back width={17} height={17} /> Change payment method
           </GhostButton>
         </div>
@@ -1552,7 +1545,7 @@ function JobDetailInner({ job }) {
       {ov === "splitUpi" && (
         <MSheet title={`Collect UPI ${rupeeAmt(upiRemainder)}`} onClose={() => setOv(null)}
           footer={
-            <PrimaryButton className="!bg-ok" disabled={!upiProofUrl || !utrOk(utr, utrSkipped) || photoBusy} onClick={() => { setUpiDone(true); setOv(null); }}>
+            <PrimaryButton className="!bg-ok" disabled={!upiProofUrl || photoBusy} onClick={() => { setUpiDone(true); setOv(null); }}>
               <Icon.check width={18} height={18} /> UPI Received
             </PrimaryButton>
           }>
@@ -1565,7 +1558,6 @@ function JobDetailInner({ job }) {
             <div className="-mt-1 mb-2.5 text-sm text-muted">Photograph the success screen on their phone.</div>
             <ProofTile url={upiProofUrl} busy={photoBusy} onTake={takeProofPhoto} onView={() => upiProofUrl && setOv("preview:" + upiProofUrl)} />
           </Card>
-          <UtrField className="mb-3 !mt-0" value={utr} onChange={setUtr} skipped={utrSkipped} onSkip={setUtrSkipped} />
         </MSheet>
       )}
       {ov === "splitCash" && (
