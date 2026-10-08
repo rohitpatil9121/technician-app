@@ -31,14 +31,26 @@ const LOW_BILL_REASONS = ["Warranty call", "Installation", "Revisit"];
 /* Purifier brands the technician picks from on the Details screen (owner,
    6 Oct 2026). "OTHER" asks him to type the name. What is saved is the brand
    itself — the picked one, or what he typed. */
-const BRANDS = ["KENT", "OASIS", "AQUAGUARD", "AO SMITH", "LIVEPURE", "PUREIT", "OTHER"];
-const brandPick = (saved) => (!saved ? "" : BRANDS.includes(saved) && saved !== "OTHER" ? saved : "OTHER");
-const brandTyped = (saved) => (saved && brandPick(saved) === "OTHER" ? saved : "");
+/* Brands and cancellation reasons come from the office (Settings › Brands and
+   Cancellation Reasons, sent with the config) so there is one list everywhere.
+   These are what the app uses until that arrives, or if it never does. "OTHER"
+   / "Other" is always the last choice and asks him to type. */
+const DEFAULT_BRANDS = ["KENT", "OASIS", "AQUAGUARD", "AO SMITH", "LIVEPURE", "PUREIT"];
+const brandsOf = (config) => {
+  const sent = Array.isArray(config?.brands) ? config.brands.map((b) => String(b).trim().toUpperCase()).filter((b) => b && b !== "OTHER") : [];
+  return [...new Set(sent.length ? sent : DEFAULT_BRANDS), "OTHER"];
+};
+const brandPick = (saved, list = brandsOf()) => (!saved ? "" : list.includes(saved) && saved !== "OTHER" ? saved : "OTHER");
+const brandTyped = (saved, list = brandsOf()) => (saved && brandPick(saved, list) === "OTHER" ? saved : "");
 
 /* The owner's list (6 Oct 2026), in plain words. The customer is sent the reason
    on WhatsApp, so each one has to read sensibly to them as well as to the
    technician. "Other" asks him to type the reason. */
-const CANCEL_REASONS = [
+const reasonsOf = (config) => {
+  const sent = Array.isArray(config?.cancel_reasons) ? config.cancel_reasons.map((r) => String(r).trim()).filter((r) => r && r.toLowerCase() !== "other") : [];
+  return sent.length ? [...new Set(sent), "Other"] : DEFAULT_CANCEL_REASONS;
+};
+const DEFAULT_CANCEL_REASONS = [
   "AMC call — not covered by us",
   "We do not service this purifier brand",
   "Customer asked to cancel",
@@ -170,6 +182,8 @@ function JobDetailInner({ job }) {
   const nav = useNavigate();
   const { updateJob, parts: partsCatalog, config } = useJobs();
   const bill = billConfig(config);
+  const BRANDS = brandsOf(config);
+  const CANCEL_REASONS = reasonsOf(config);
   const w = job.work || {};
   const draft = loadJobDraft(job.id);
   const st = job.status;
@@ -191,8 +205,8 @@ function JobDetailInner({ job }) {
   // editable state because the draft below keeps them across a WebView reload.
   const [closeRemark, setCloseRemark] = useState(draft?.closeRemark ?? "");
   const [customerRemark, setCustomerRemark] = useState(draft?.customerRemark ?? "");
-  const [brand, setBrand] = useState(draft?.brand ?? brandPick(w.brand));
-  const [brandOther, setBrandOther] = useState(draft?.brandOther ?? brandTyped(w.brand));
+  const [brand, setBrand] = useState(draft?.brand ?? brandPick(w.brand, brandsOf(config)));
+  const [brandOther, setBrandOther] = useState(draft?.brandOther ?? brandTyped(w.brand, brandsOf(config)));
   // The brand as it is saved: the one picked, or the name typed for OTHER.
   const brandValue = brand === "OTHER" ? brandOther.trim().toUpperCase() : brand;
   const [partSearch, setPartSearch] = useState("");
@@ -624,7 +638,7 @@ function JobDetailInner({ job }) {
     setServiceCharge(Number(w.service_charge ?? (job.visitCharge === 0 ? 0 : bill.serviceCharge)));
     setParts(w.parts ?? []);
     setModelName(w.model_name ?? (job.model && job.model !== "—" ? job.model : ""));
-    setBrand(brandPick(w.brand)); setBrandOther(brandTyped(w.brand));
+    setBrand(brandPick(w.brand, BRANDS)); setBrandOther(brandTyped(w.brand, BRANDS));
     setCallTypeNote(w.call_type_note ?? "");
     stepForward();
   };
